@@ -3,6 +3,57 @@
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns = [
+  // Low severity - Document query selectors without direct vulnerability
+  {
+    type: "documentQuerySelector",
+    regex: /document\.querySelector\(\s*(['"`][^'"`]*['"`])\s*\)/g,
+    severity: "low" as const,
+    title: "Document Query Selector Usage",
+    description: "Using document.querySelector without proper validation can lead to targeting unintended elements. While not directly vulnerable, it can be part of a larger attack chain.",
+    recommendation: "Ensure selectors are properly validated and consider using more specific selectors or data attributes for dynamic content.",
+    recommendationCode: `// Bad practice
+document.querySelector(userProvidedSelector);
+
+// Better practice - validate selectors or use predefined selectors
+// Using specific data attributes
+document.querySelector(\`[data-user-id="\${sanitizeAttribute(userId)}"]\`);`
+  },
+  // Low severity - Text manipulation
+  {
+    type: "textManipulation",
+    regex: /\.innerText\s*=\s*([^;]*)/g,
+    severity: "low" as const,
+    title: "Text Content Manipulation",
+    description: "Using innerText with unsanitized data is generally safer than innerHTML but still may have unexpected results with certain inputs.",
+    recommendation: "Ensure input is properly validated before using with innerText. For most cases, this is safe but consider textContent for better cross-browser compatibility.",
+    recommendationCode: `// More consistent across browsers
+element.textContent = validatedUserInput;
+
+// When only need to display
+const safeText = userInput.replace(/<\/?[^>]+(>|$)/g, "");
+element.innerText = safeText;`
+  },
+  // Low severity - Potential unsafe URL construction
+  {
+    type: "urlConstruction",
+    regex: /(?:['"`]https?:\/\/['"`]\s*\+|['"`]https?:\/\/[^'"`]*\$\{)/g,
+    severity: "low" as const,
+    title: "Unsafe URL Construction",
+    description: "Constructing URLs by concatenating strings or using template literals can introduce URL injection vulnerabilities if not properly validated.",
+    recommendation: "Use URL constructor or URLSearchParams to safely build URLs with user input.",
+    recommendationCode: `// Instead of direct concatenation:
+// const url = 'https://example.com/?q=' + userInput;
+
+// Use URL and URLSearchParams:
+const baseUrl = 'https://example.com/';
+const url = new URL(baseUrl);
+url.searchParams.append('q', userInput);
+
+// Result: safe URL with properly encoded parameters
+fetch(url.toString())
+  .then(response => response.json())
+  .then(data => console.log(data));`
+  },
   // DOM-based XSS vulnerabilities - Critical risk
   {
     type: "innerHTML",
