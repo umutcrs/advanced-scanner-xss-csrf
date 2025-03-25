@@ -514,11 +514,27 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
   }
   
   // Additional context checking for specific elements
-  // Give lower confidence for img.src assignments as they're less likely to be XSS vectors
-  if (vulnType.includes("src") && /\.src\s*=/.test(match[0])) {
-    // If it's an image element, it's less likely to be a problem
-    if (/img|image|picture|avatar|photo/i.test(context)) {
-      confidence -= 0.25;
+  // Special handling for any element.src assignment
+  if (/\.src\s*=/.test(match[0])) {
+    // Check if it specifically mentions HTML sanitization with textContent
+    if (/document\.createTextNode\([^)]*\)\.textContent/.test(context)) {
+      confidence -= 0.6; // This is a strong sanitization approach
+    }
+
+    // Check element type - scripts are dangerous, images are safer
+    if (/script|javascript/i.test(context) && /\.src\s*=/.test(match[0])) {
+      // It appears to be a script src assignment, maintain high confidence
+      confidence += 0.2;
+    } else if (/\b(?:img|image|picture|avatar|photo|uploaded(?:Image|Picture|File))\b/i.test(context) && /\.src\s*=/.test(match[0])) {
+      // Specifically detect image elements by common naming patterns
+      confidence -= 0.4;
+    }
+    
+    // Additional check for element types
+    if (vulnType === "imageSrcAssignment") {
+      confidence -= 0.3; // Reduce confidence for image elements
+    } else if (vulnType === "scriptSrcAssignment") {
+      confidence += 0.2; // Increase confidence for script elements
     }
   }
   

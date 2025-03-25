@@ -81,10 +81,48 @@ function validateServerSide(input) {
   return { valid: true };
 }`
   },
-  // Low severity - Image source assignment from user input
+  // Script source assignment - properly categorized and filtered
+  {
+    type: "scriptSrcAssignment",
+    regex: /\b(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
+    severity: "high" as const,
+    title: "Dynamic Script Source Assignment",
+    description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
+    recommendation: "Always validate script sources against a whitelist of trusted domains.",
+    recommendationCode: `function loadExternalScript(src) {
+  // Whitelist of trusted domains
+  const trustedDomains = [
+    'cdn.trusted-site.com',
+    'api.your-company.com',
+    'cdn.jsdelivr.net'
+  ];
+  
+  // Parse the URL to get the hostname
+  let url;
+  try {
+    url = new URL(src, window.location.origin);
+  } catch (e) {
+    console.error("Invalid URL format");
+    return;
+  }
+  
+  // Check if the hostname is trusted
+  if (!trustedDomains.includes(url.hostname)) {
+    console.error("Untrusted script source domain");
+    return;
+  }
+  
+  // Now it's safer to load the script
+  const script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}`
+  },
+  
+  // Low severity - Image source assignment from user input (separate from script src)
   {
     type: "imageSrcAssignment",
-    regex: /\b(?:img|image)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
+    regex: /\b(?:img|image|picture|avatar|photo)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
     severity: "low" as const,
     title: "Dynamic Image Source Assignment",
     description: "Setting an image source dynamically is generally safe but may need validation to prevent information leakage or CSP bypass.",
