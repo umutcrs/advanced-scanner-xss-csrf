@@ -3,6 +3,51 @@
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns = [
+  // Direct meta tag content assignment with user input - extra pattern
+  {
+    type: "directMetaTagContentAssignment",
+    regex: /meta(?:Tag)?\.content\s*=\s*(?!['"])[^;]+(?:user|url|param|get|location|search|hash)/gi,
+    severity: "medium" as const,
+    title: "Direct Meta Tag Content Assignment",
+    description: "Setting meta tag content directly with user-controllable data can lead to metadata manipulation, SEO poisoning, or in some cases to redirection attacks.",
+    recommendation: "Sanitize and validate user input before assigning to meta tag content attribute.",
+    recommendationCode: `// UNSAFE pattern:
+// metaTag.content = userDescription; // Direct assignment from user input
+
+// SAFER approach:
+function setSafeMetaDescription(description) {
+  // 1. Validate input type
+  if (typeof description !== 'string') {
+    console.error('Invalid meta description type');
+    return false;
+  }
+  
+  // 2. Length validation
+  if (description.length > 160) { // Standard meta description max length
+    description = description.substring(0, 160);
+  }
+  
+  // 3. Remove potential HTML or script content
+  description = description
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+  
+  // 4. Set the sanitized content
+  const metaTag = document.createElement('meta');
+  metaTag.name = "description";
+  metaTag.content = description;
+  document.head.appendChild(metaTag);
+  
+  return true;
+}
+
+// Usage:
+const userDescription = getUrlParameter('description');
+setSafeMetaDescription(userDescription);`
+  },
   // Low severity - Document query selectors without direct vulnerability
   {
     type: "documentQuerySelector",
@@ -2341,7 +2386,7 @@ observer.observe(secureContainer, {
   // Meta tag injection
   {
     type: "metaTagInjection",
-    regex: /createElement\s*\(\s*['"]meta['"].*?\.(content|setAttribute)\s*\(\s*['"]content['"]\s*,\s*(?!['"]\s*\+\s*(?:sanitize|validate|escape|check|filter))/g,
+    regex: /createElement\s*\(\s*['"]meta['"][^;]*(?:\.content\s*=|\.setAttribute\s*\(\s*(?:['"]content['"]|['"]http-equiv['"]))[^;]*(?:get|location|url|parameter|param|query|search|hash|user)/gi,
     severity: "medium" as const,
     title: "Potential Meta Tag Injection",
     description: "Dynamically creating meta tags with user-controlled content can lead to client-side redirects or influence browser behavior.",
