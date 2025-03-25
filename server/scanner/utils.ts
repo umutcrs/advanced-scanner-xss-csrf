@@ -122,30 +122,91 @@ export function formatCodeSnippet(code: string): string {
  * @returns Array of validated vulnerable indices where data flow is confirmed
  */
 export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: number, length: number, type: string}>): Array<{index: number, length: number, type: string}> {
-  // Common user input sources
+  // Common user input sources with expanded patterns
   const userInputSources = [
+    // DOM input sources
     /document\.getElementById\([^)]+\)\.value/g,
     /document\.querySelector\([^)]+\)\.value/g,
     /getElementById\([^)]+\)\.value/g,
     /querySelector\([^)]+\)\.value/g,
     /\.(value|innerHTML|innerText|textContent)/g,
+    /document\.forms\[\s*(['"]?\w+['"]?|[0-9]+)\s*\]/g,
+    /\belement\.value|\binput\.value|\bfield\.value/g,
+    
+    // Direct user inputs
     /\bprompt\s*\(/g,
-    /\blocation\.(href|search|hash|pathname)/g,
-    /\$\.\s*(?:get|post)\s*\(/g,
-    /fetch\s*\(/g,
-    /XMLHttpRequest/g,
+    /\bconfirm\s*\(/g,
+    /\balert\s*\(/g,
+    
+    // URL and location data
+    /\blocation\.(?:href|search|hash|pathname|origin|host)/g,
+    /\bURL\.searchParams\.get\s*\(/g,
+    /\bnew\s+URLSearchParams\s*\(/g,
+    /\bwindow\.location/g,
+    /\bdocument\.URL/g,
+    /\bdocument\.documentURI/g,
+    /\bdocument\.referrer/g,
+    
+    // Network requests
+    /\$\.(?:get|post|ajax)\s*\(/g,
+    /\$\.(?:getJSON|load)\s*\(/g,
+    /\bfetch\s*\(/g,
+    /\baxios\.(?:get|post|request|put|patch|delete)\s*\(/g,
+    /\bnew\s+XMLHttpRequest/g,
+    /\bXMLHttpRequest\.(?:open|send)\s*\(/g,
+    /\.then\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/g,
+    /\.catch\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/g,
+    /\bawait\s+(?:fetch|axios|response)\b/g,
+    /\.json\(\s*\)|\.text\(\s*\)|\.blob\(\s*\)/g,
+    
+    // Storage access
+    /\blocalStorage\.getItem\s*\(/g,
+    /\bsessionStorage\.getItem\s*\(/g,
+    /\bcookie\s*=|document\.cookie/g,
+    /\bIndexedDB\b|\bidb\b/g,
+    
+    // URL utilities
     /\bURL\s*\(/g,
-    /localStorage\.getItem/g,
-    /sessionStorage\.getItem/g
+    /\bdecodeURI\s*\(/g,
+    /\bdecodeURIComponent\s*\(/g,
+    
+    // Event handlers (common source of user input)
+    /\bonchange\s*=|\bonpaste\s*=|\boninput\s*=|\bonsubmit\s*=/g,
+    /addEventListener\s*\(\s*['"](?:input|change|paste|submit|keyup|keydown|keypress|click)['"]]/g,
+    /\bevent\.(?:target|currentTarget|srcElement)\b/g,
+    /\be\.(?:target|currentTarget)\b/g,
+    
+    // Frameworks
+    /\$\(\s*['"][^'"]*['"]\s*\)\.val\(\s*\)/g, // jQuery value getter
+    /\bangular\b|\bng-model\b|\bng-bind\b/g,   // Angular bindings
+    /\bv-model\b|\bv-bind\b/g,                 // Vue bindings
+    /\bthis\.(?:state|props)\.[a-zA-Z0-9_$]+/g, // React state/props
+    /\buseState\s*\(|\buseRef\s*\(/g,           // React hooks
+    
+    // Common variable names often holding user input
+    /\b(?:user|input|value|param|data|content|field|text|query|request|search|payload|message|name|email|password|address|content)(?:Value|Data|Input|Content|Field|Text)?\b/gi
+  ];
+  
+  // List of high-risk vulnerability types that should always be included
+  const highRiskTypes = [
+    // Critical severity
+    'eval', 'indirectEval', 'functionConstructor', 'jsGlobalWithEval',
+    'innerHTML', 'outerHTML', 'dangerouslySetInnerHTML', 'scriptTextContent',
+    'setAttributeEvent', 'srcdocAssignment', 'trustedTypesEscape', 
+    'dynamicScriptInjection', 'angularTemplateInjection', 'prototypeExpando',
+    
+    // High severity
+    'documentWrite', 'documentWriteLn', 'insertAdjacentHTML', 'setTimeout', 
+    'setInterval', 'jqueryHtmlMethod', 'htmlTemplateInjection', 'baseHref'
   ];
   
   const validatedVulnerabilities = [];
   
   for (const vul of vulnerableIndices) {
-    // Skip small code blocks that are likely to be false positives
+    // Skip very small code blocks that are likely to be false positives
     if (vul.length < 3) continue;
     
-    // Extract a larger context around the vulnerability (up to 5 lines before)
+    // Extract a larger context around the vulnerability
     const contextStartIndex = findContextStart(code, vul.index, 800);
     const contextCode = code.substring(contextStartIndex, vul.index + vul.length);
     
@@ -160,12 +221,88 @@ export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: n
       }
     }
     
-    // If user input is present or the vulnerability type is already high-risk
-    // (like eval or innerHTML assignment), include it in validated results
-    if (hasUserInput || 
-        ['eval', 'innerHTML', 'outerHTML', 'documentWrite', 'insertAdjacentHTML', 'functionConstructor', 
-        'setTimeout', 'setInterval', 'dangerouslySetInnerHTML'].includes(vul.type)) {
-      validatedVulnerabilities.push(vul);
+    // Advanced data flow tracking:
+    // Look for variable assignments that might carry user input to our vulnerability
+    let dataFlowConfidence = 0;
+    
+    // Extract potential variable names from the vulnerability point
+    const vulnCode = code.substring(vul.index, vul.index + vul.length);
+    const variableMatches = vulnCode.match(/[a-zA-Z0-9_$]+/g) || [];
+    
+    if (variableMatches.length > 0) {
+      // Look for these variables being assigned from user input sources
+      for (const varName of variableMatches) {
+        // Skip common keywords and very short variable names
+        if (['if', 'else', 'for', 'while', 'var', 'let', 'const', 'function', 'return', 'true', 'false', 'null', 'undefined'].includes(varName) || varName.length < 2) {
+          continue;
+        }
+        
+        // Look for assignment of this variable in the context
+        const assignmentPattern = new RegExp(`(?:var|let|const)\\s+${varName}\\s*=|${varName}\\s*=(?!=)`, 'g');
+        let match;
+        
+        while ((match = assignmentPattern.exec(contextCode)) !== null) {
+          // Look at what's being assigned to this variable
+          const assignmentPos = match.index + match[0].length;
+          const endOfLine = contextCode.indexOf(';', assignmentPos);
+          const assignmentValue = endOfLine > assignmentPos ? 
+            contextCode.substring(assignmentPos, endOfLine) : 
+            contextCode.substring(assignmentPos, assignmentPos + 30);
+          
+          // Check if any user input sources appear in the assignment
+          for (const sourceRegex of userInputSources) {
+            sourceRegex.lastIndex = 0;
+            if (sourceRegex.test(assignmentValue)) {
+              dataFlowConfidence = 0.7; // Strong confidence if we find direct assignment
+              break;
+            }
+          }
+          
+          // Check for data transformations that often indicate processing of user input
+          const transformPatterns = [
+            /\.replace\s*\(/g, /\.trim\s*\(\s*\)/g, /\.substring\s*\(/g, /\.split\s*\(/g,
+            /\.join\s*\(/g, /\.match\s*\(/g, /\.toLowerCase\s*\(\s*\)/g, /\.toUpperCase\s*\(\s*\)/g,
+            /\+\s*['"][^'"]*['"]/g, // String concatenation
+            /\$\{/g, // Template literals
+            /JSON\.parse\s*\(/g, /JSON\.stringify\s*\(/g,
+            /encodeURI\s*\(/g, /encodeURIComponent\s*\(/g,
+            /parseInt\s*\(/g, /parseFloat\s*\(/g
+          ];
+          
+          for (const pattern of transformPatterns) {
+            pattern.lastIndex = 0;
+            if (pattern.test(assignmentValue)) {
+              dataFlowConfidence = Math.max(dataFlowConfidence, 0.4); // Moderate confidence
+            }
+          }
+        }
+      }
+    }
+    
+    // If user input is present, we found direct data flow, or it's a high-risk vulnerability type
+    if (hasUserInput || dataFlowConfidence >= 0.4 || highRiskTypes.includes(vul.type)) {
+      // For moderate confidence data flow, check if there's any sanitization happening
+      if (dataFlowConfidence >= 0.4 && dataFlowConfidence < 0.7) {
+        const sanitizationPatterns = [
+          /\.escape\s*\(/g, /\.sanitize\s*\(/g, /DOMPurify\.sanitize\s*\(/g,
+          /\.encodeHTML\s*\(/g, /htmlspecialchars\s*\(/g, /createTextNode\s*\(/g,
+          /textContent\s*=/g
+        ];
+        
+        // If strong evidence of sanitization, reduce our confidence
+        for (const pattern of sanitizationPatterns) {
+          pattern.lastIndex = 0;
+          if (pattern.test(contextCode)) {
+            dataFlowConfidence -= 0.3;
+            break;
+          }
+        }
+      }
+      
+      // Include the vulnerability if we still have sufficient confidence
+      if (dataFlowConfidence >= 0.4 || hasUserInput || highRiskTypes.includes(vul.type)) {
+        validatedVulnerabilities.push(vul);
+      }
     }
   }
   
@@ -217,6 +354,10 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "setAttributeEvent": 0.85,
     "srcdocAssignment": 0.9,
     "angularBypassSecurityTrustHtml": 0.9,
+    "trustedTypesEscape": 0.95,
+    "dynamicScriptInjection": 0.95,
+    "angularTemplateInjection": 0.9,
+    "prototypeExpando": 0.9,
     
     // High severity
     "insertAdjacentHTML": 0.75,
@@ -229,10 +370,14 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "templateLiteralHtml": 0.75,
     "htmlFromConcatenation": 0.75,
     "unsafeJQueryHtml": 0.8,
+    "jqueryHtmlMethod": 0.8,
     "documentCreateRange": 0.75,
     "eventHandlerProperty": 0.8,
     "iframeSrc": 0.7,
     "vueVBind": 0.7,
+    "htmlTemplateInjection": 0.75,
+    "baseHref": 0.8,
+    "jsonpCallback": 0.75,
     
     // Medium severity
     "locationAssignment": 0.65,
@@ -243,10 +388,13 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "postMessageOrigin": 0.65,
     "domParser": 0.6,
     "jsonParse": 0.55,
+    "vulnerableJsonParse": 0.6,
     "parseFromString": 0.6,
     "scriptElement": 0.65,
     "objectDefineProperty": 0.65,
     "documentCreateElement": 0.6,
+    "cssExpressionInjection": 0.6,
+    "domClobbering": 0.65,
     
     // Low severity
     "innerText": 0.45,
