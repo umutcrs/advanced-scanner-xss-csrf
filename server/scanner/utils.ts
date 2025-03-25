@@ -340,66 +340,79 @@ function findContextStart(code: string, index: number, maxLookback: number): num
  * @returns A confidence score between 0 and 1
  */
 export function calculateConfidenceScore(code: string, match: RegExpExecArray, vulnType: string): number {
-  // Base confidence by vulnerability type
+  // Base confidence by vulnerability type - optimized for better true/false positive ratio
   const baseConfidence: Record<string, number> = {
     // Critical severity - highest confidence
     "eval": 0.95,
     "indirectEval": 0.95,
-    "functionConstructor": 0.95,
-    "jsGlobalWithEval": 0.9,
+    "functionConstructor": 0.95, 
+    "jsGlobalWithEval": 0.90,
     "innerHTML": 0.85,
     "outerHTML": 0.85,
     "dangerouslySetInnerHTML": 0.85,
-    "scriptTextContent": 0.9,
+    "scriptTextContent": 0.90,
     "setAttributeEvent": 0.85,
-    "srcdocAssignment": 0.9,
-    "angularBypassSecurityTrustHtml": 0.9,
+    "srcdocAssignment": 0.90,
+    "angularBypassSecurityTrustHtml": 0.90,
     "trustedTypesEscape": 0.95,
     "dynamicScriptInjection": 0.95,
-    "angularTemplateInjection": 0.9,
-    "prototypeExpando": 0.9,
+    "angularTemplateInjection": 0.90,
+    "prototypeExpando": 0.90,
+    "sanitizationBypass": 0.95, // New pattern - high confidence
     
     // High severity
-    "insertAdjacentHTML": 0.75,
-    "documentWrite": 0.75,
-    "documentWriteLn": 0.75,
+    "insertAdjacentHTML": 0.80,
+    "documentWrite": 0.80,
+    "documentWriteLn": 0.80,
     "setTimeout": 0.75,
     "setInterval": 0.75,
-    "setAttribute": 0.7,
-    "scriptSrc": 0.8,
+    "setAttribute": 0.70,
+    "scriptSrc": 0.85,
+    "scriptSrcAssignment": 0.85, // Updated for better confidence
     "templateLiteralHtml": 0.75,
+    "templateLiteralInjection": 0.80, // New pattern - good confidence
     "htmlFromConcatenation": 0.75,
-    "unsafeJQueryHtml": 0.8,
-    "jqueryHtmlMethod": 0.8,
+    "unsafeJQueryHtml": 0.80,
+    "jqueryHtmlMethod": 0.80,
     "documentCreateRange": 0.75,
-    "eventHandlerProperty": 0.8,
-    "iframeSrc": 0.7,
-    "vueVBind": 0.7,
+    "eventHandlerProperty": 0.80,
+    "iframeSrc": 0.70,
+    "vueVBind": 0.70,
     "htmlTemplateInjection": 0.75,
-    "baseHref": 0.8,
+    "baseHref": 0.80,
     "jsonpCallback": 0.75,
+    "mutationXSS": 0.85, // New pattern - high confidence
+    "clientTemplateInjection": 0.80, // New pattern - good confidence
     
     // Medium severity
     "locationAssignment": 0.65,
     "locationHref": 0.65,
-    "locationPropertyAssignment": 0.6,
-    "aHref": 0.6,
-    "objectData": 0.6,
+    "locationPropertyAssignment": 0.60,
+    "aHref": 0.60,
+    "objectData": 0.60,
     "postMessageOrigin": 0.65,
-    "domParser": 0.6,
+    "domParser": 0.60,
+    "domParserVulnerability": 0.65, // New pattern - adjusted confidence
     "jsonParse": 0.55,
-    "vulnerableJsonParse": 0.6,
-    "parseFromString": 0.6,
+    "jsonParseVulnerability": 0.65, // New pattern - adjusted confidence
+    "vulnerableJsonParse": 0.60,
+    "parseFromString": 0.60,
     "scriptElement": 0.65,
     "objectDefineProperty": 0.65,
-    "documentCreateElement": 0.6,
-    "cssExpressionInjection": 0.6,
+    "documentCreateElement": 0.60,
+    "cssExpressionInjection": 0.60,
     "domClobbering": 0.65,
+    "directMetaTagContentAssignment": 0.65, // Adjusted for better accuracy
     
     // Low severity
     "innerText": 0.45,
-    "documentGetElementById": 0.4,
-    "urlSearchParamsAppend": 0.4
+    "textManipulation": 0.45, // Aligned with innerText
+    "documentGetElementById": 0.40,
+    "documentQuerySelector": 0.40, // Low confidence to reduce false positives
+    "urlSearchParamsAppend": 0.40,
+    "urlConstruction": 0.45, // Slightly higher than baseline low severity
+    "clientSideValidation": 0.40,
+    "imageSrcAssignment": 0.40 // Low confidence as it's usually not a direct XSS vector
   };
   
   // Start with the base confidence for this vulnerability type

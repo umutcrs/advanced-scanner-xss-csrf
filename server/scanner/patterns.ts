@@ -28,6 +28,110 @@ const unsafeTemplate = \`<div>\${userInput}</div>\`;
 element.innerHTML = DOMPurify.sanitize(unsafeTemplate);`
   },
   
+  // HTML Sanitization Bypass Techniques
+  {
+    type: "sanitizationBypass",
+    regex: /(?:bypassSecurityTrust(?:Html|Script|Style|Resource|Url))|(?:DOMPurify\.sanitize\([^,]*,\s*\{[^}]*ALLOW_SCRIPT[^}]*\})/gi,
+    severity: "critical" as const,
+    title: "Sanitization Bypass",
+    description: "Using methods that bypass HTML sanitization or configuring sanitizers to allow script execution can lead to XSS vulnerabilities even when sanitization is attempted.",
+    recommendation: "Never use security bypassing methods. Configure sanitizers properly to prevent script execution.",
+    recommendationCode: `// UNSAFE Angular sanitization bypass:
+// this.sanitizer.bypassSecurityTrustHtml(userInput);
+
+// UNSAFE DOMPurify configuration:
+// DOMPurify.sanitize(userInput, {ALLOW_SCRIPT: true});
+
+// SAFE approaches:
+// Angular
+import { DomSanitizer } from '@angular/platform-browser';
+
+// In component:
+constructor(private sanitizer: DomSanitizer) {}
+
+// For displaying HTML content safely:
+const safeHtml = this.sanitizer.sanitize(SecurityContext.HTML, userInput);
+
+// DOMPurify (default configuration is safe)
+import DOMPurify from 'dompurify';
+
+// Default configuration removes scripts
+const cleanHtml = DOMPurify.sanitize(userInput);
+
+// For strict sanitization:
+const veryCleanHtml = DOMPurify.sanitize(userInput, {
+  FORBID_TAGS: ['style', 'form', 'input', 'iframe'],
+  FORBID_ATTR: ['srcset', 'src', 'href', 'xlink:href']
+});`
+  },
+  
+  // Mutation XSS (mXSS) - Detection of specific patterns vulnerable to mXSS
+  {
+    type: "mutationXSS",
+    regex: /\.innerHTML\s*=\s*[^;]*(?:\.innerHTML|\.innerText|\.textContent|\.value|\$\([^)]*\)\.html\(\))/gi,
+    severity: "high" as const,
+    title: "Mutation-based XSS (mXSS)",
+    description: "Setting innerHTML with content retrieved from another DOM element can lead to mutation-based XSS when the browser's HTML parser reinterprets malformed HTML in an unsafe way.",
+    recommendation: "Avoid moving HTML between elements using innerHTML. If needed, use proper sanitization before each insertion.",
+    recommendationCode: `// UNSAFE - mXSS vulnerable:
+// const content = document.getElementById('user-content').innerHTML;
+// targetElement.innerHTML = content;
+
+// SAFER:
+import DOMPurify from 'dompurify';
+
+// Option 1: Extract only text content
+const textContent = sourceElement.textContent;
+targetElement.textContent = textContent;
+
+// Option 2: If HTML is needed, sanitize first
+const sourceHtml = sourceElement.innerHTML;
+targetElement.innerHTML = DOMPurify.sanitize(sourceHtml);
+
+// Option 3: Create a proper DOM clone instead of innerHTML transfer
+const clone = sourceElement.cloneNode(true);
+targetElement.appendChild(clone);`
+  },
+  
+  // Client-Side Template Injection
+  {
+    type: "clientTemplateInjection",
+    regex: /\{\{(?!DOMPurify\.sanitize)[^}]*(?:user|input|param|query|value|get|data)[^}]*\}\}/gi,
+    severity: "high" as const,
+    title: "Client-Side Template Injection",
+    description: "Using user-controlled data in template systems like Handlebars, Mustache, or Angular templates can lead to template injection attacks.",
+    recommendation: "Sanitize user input before using it in templates or use safe binding mechanisms that prevent expression evaluation.",
+    recommendationCode: `// UNSAFE Angular template binding:
+// <div [innerHTML]="userContent"></div>
+
+// SAFER Angular approach:
+// <div>{{ userContent }}</div> <!-- Angular auto-escapes this -->
+
+// For other template systems (Handlebars, Mustache, etc.):
+
+// UNSAFE:
+// const template = Handlebars.compile('{{{userContent}}}');
+
+// SAFER:
+// 1. Escape user content before template compilation
+import Handlebars from 'handlebars';
+
+// Handlebars auto-escapes with double braces
+const template = Handlebars.compile('{{userContent}}');
+const html = template({ userContent: userInput });
+
+// 2. For frameworks with sanitization:
+import DOMPurify from 'dompurify';
+const cleanUserInput = DOMPurify.sanitize(userInput);
+
+const data = {
+  userContent: cleanUserInput
+};
+
+// Then use the sanitized data in your template
+const html = template(data);`
+  },
+  
   // DOM Clobbering vulnerability
   {
     type: "domClobbering",

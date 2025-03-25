@@ -10,8 +10,11 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 // Confidence threshold - vulnerabilities with lower scores will be excluded
-const CONFIDENCE_THRESHOLD = 0.30; // Lowered threshold to catch more potential issues, but still filter obvious false positives
-const LOW_CONFIDENCE_THRESHOLD = 0.25; // Even lower threshold for low severity issues to ensure they're reported
+// Fine-tuned thresholds for optimal true/false positive balance
+const CONFIDENCE_THRESHOLD = 0.35; // Balanced threshold that catches real issues without too many false positives
+const LOW_CONFIDENCE_THRESHOLD = 0.25; // Lower threshold for low severity issues to ensure they're reported
+const CRITICAL_CONFIDENCE_THRESHOLD = 0.50; // Higher threshold for critical severity to reduce false positives
+const HIGH_CONFIDENCE_THRESHOLD = 0.40; // Threshold for high severity issues
 
 /**
  * Advanced scanning engine for detecting XSS vulnerabilities in JavaScript code
@@ -85,8 +88,16 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     const confidence = calculateConfidenceScore(preparedCode, vul.match, vul.type);
     
     // Apply different confidence thresholds based on severity
-    // Low severity issues get a lower threshold to ensure they're reported
-    const threshold = vul.pattern.severity === 'low' ? LOW_CONFIDENCE_THRESHOLD : CONFIDENCE_THRESHOLD;
+    // Each severity level has an appropriate threshold to balance false positives/negatives
+    let threshold = CONFIDENCE_THRESHOLD;
+    
+    if (vul.pattern.severity === 'low') {
+      threshold = LOW_CONFIDENCE_THRESHOLD;
+    } else if (vul.pattern.severity === 'high') {
+      threshold = HIGH_CONFIDENCE_THRESHOLD;
+    } else if (vul.pattern.severity === 'critical') {
+      threshold = CRITICAL_CONFIDENCE_THRESHOLD;
+    }
     
     // Only include vulnerabilities that meet the appropriate confidence threshold
     if (confidence >= threshold) {
