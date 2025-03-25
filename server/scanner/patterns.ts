@@ -54,6 +54,58 @@ fetch(url.toString())
   .then(response => response.json())
   .then(data => console.log(data));`
   },
+  // Low severity - Better form validation
+  {
+    type: "clientSideValidation",
+    regex: /^\s*if\s*\([^\)]*(?:length|size|value)[\s\><=!]+[0-9]+/gm,
+    severity: "low" as const,
+    title: "Client-Side Only Validation",
+    description: "Relying solely on client-side validation can be bypassed by attackers. While not directly an XSS issue, it can contribute to security risks.",
+    recommendation: "Always implement server-side validation alongside client-side validation for a strong security posture.",
+    recommendationCode: `// Client side validation (good for UX)
+function validateClientSide(input) {
+  if (!input || input.length > 100) {
+    showError('Input too long or empty');
+    return false;
+  }
+  return true;
+}
+
+// Server side validation (REQUIRED for security)
+// In your server code:
+function validateServerSide(input) {
+  if (!input || typeof input !== 'string' || input.length > 100) {
+    return { valid: false, error: 'Invalid input' };
+  }
+  // Additional checks as necessary
+  return { valid: true };
+}`
+  },
+  // Low severity - Image source assignment from user input
+  {
+    type: "imageSrcAssignment",
+    regex: /\b(?:img|image)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
+    severity: "low" as const,
+    title: "Dynamic Image Source Assignment",
+    description: "Setting an image source dynamically is generally safe but may need validation to prevent information leakage or CSP bypass.",
+    recommendation: "For dynamic image sources, use a valid URL format and apply proper sanitization if user inputs are involved.",
+    recommendationCode: `// Ensure the path is safe before assigning to image src
+function setImageSrc(imagePath, imgElement) {
+  // Sanitize the path if it comes from user input
+  // (Using textContent sanitization is one good approach)
+  const tempNode = document.createTextNode(imagePath);
+  const sanitizedPath = tempNode.textContent;
+  
+  // Validate the path format if needed
+  if (!sanitizedPath.match(/^(https?:\\/\\/|\\/|\\.\\/)[\\w\\d\\-\\.\\/\\?\\=\\&\\%\\+\\#\\:]+$/i)) {
+    console.error('Invalid image path format');
+    return false;
+  }
+  
+  imgElement.src = sanitizedPath;
+  return true;
+}`
+  },
   // DOM-based XSS vulnerabilities - Critical risk
   {
     type: "innerHTML",

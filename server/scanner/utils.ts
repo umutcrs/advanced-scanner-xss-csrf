@@ -488,10 +488,37 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     /new\s+Function\((?:[^)]*?)(?:user|input|value|param)/i // Function constructor with user input
   ];
   
+  // Patterns that indicate proper sanitization is being used - reduce false positives
+  const sanitizationContextPatterns = [
+    /document\.createTextNode\([^)]*\)\.textContent/i, // Using textContent of TextNode to sanitize
+    /DOMPurify\.sanitize/i,                            // Using DOMPurify
+    /\.replace\s*\([^)]*\)/i,                         // Using string replace
+    /sanitize(?:d|r)?(?:[A-Z]|_)/i,                   // Something explicitly named as "sanitized"
+    /\.encodeURI(?:Component)?\s*\(/i,                // URL encoding functions
+    /\bvalid(?:ate|ation)/i                           // Validation mentions
+  ];
+  
   for (const pattern of dangerousPatterns) {
     if (pattern.test(context)) {
       confidence += 0.1;
       break;
+    }
+  }
+  
+  // Reduce confidence if we see evidence of proper sanitization
+  for (const pattern of sanitizationContextPatterns) {
+    if (pattern.test(context)) {
+      confidence -= 0.3; // Significantly reduce confidence if sanitization is detected
+      break;
+    }
+  }
+  
+  // Additional context checking for specific elements
+  // Give lower confidence for img.src assignments as they're less likely to be XSS vectors
+  if (vulnType.includes("src") && /\.src\s*=/.test(match[0])) {
+    // If it's an image element, it's less likely to be a problem
+    if (/img|image|picture|avatar|photo/i.test(context)) {
+      confidence -= 0.25;
     }
   }
   
