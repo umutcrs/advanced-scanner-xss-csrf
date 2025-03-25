@@ -108,11 +108,13 @@ export default function CodeInputPanel({ onScan, isScanning }: CodeInputPanelPro
               <label htmlFor="code-input" className="block text-sm font-medium text-gray-700 mb-1">
                 JavaScript Code
               </label>
-              <div className="h-80 border rounded-md">
+              <div className="border rounded-md">
                 <CodeEditor 
                   value={code} 
                   onChange={setCode} 
                   language="javascript"
+                  height="400px" 
+                  maxVisibleLines={150}
                 />
               </div>
             </div>

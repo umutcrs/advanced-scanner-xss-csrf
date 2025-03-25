@@ -3,6 +3,139 @@
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns = [
+  // Template Literal Injection with unescaped parameters
+  {
+    type: "templateLiteralInjection",
+    regex: /`[^`]*\${(?!DOMPurify\.sanitize\()[^}]*(?:user|input|param|query|url|location|search|hash|get)[^}]*\}[^`]*`/gi,
+    severity: "high" as const,
+    title: "Template Literal Injection",
+    description: "Using unescaped user data in template literals that are later injected into HTML can lead to XSS vulnerabilities.",
+    recommendation: "Always sanitize user data before using it in template literals that will be inserted into HTML.",
+    recommendationCode: `// UNSAFE:
+// const template = \`<div>\${userInput}</div>\`;
+// element.innerHTML = template;
+
+// SAFE:
+import DOMPurify from 'dompurify';
+
+// Option 1: Sanitize before template insertion
+const sanitizedInput = DOMPurify.sanitize(userInput);
+const template = \`<div>\${sanitizedInput}</div>\`;
+element.innerHTML = template;
+
+// Option 2: Sanitize the entire template
+const unsafeTemplate = \`<div>\${userInput}</div>\`;
+element.innerHTML = DOMPurify.sanitize(unsafeTemplate);`
+  },
+  
+  // DOM Clobbering vulnerability
+  {
+    type: "domClobbering",
+    regex: /document\.getElementById\(\s*['"`](?:body|head|forms|length|name|id|firstChild|lastChild|nextSibling|previousSibling|parentNode|nodeName|nodeType|ownerDocument)['"`]\s*\)/gi,
+    severity: "medium" as const,
+    title: "DOM Clobbering Vulnerability",
+    description: "Using IDs that match built-in DOM properties can lead to DOM Clobbering attacks where attackers create HTML elements with matching IDs to override expected behavior.",
+    recommendation: "Avoid using common DOM property names as element IDs and validate user input that might be used for element identification.",
+    recommendationCode: `// UNSAFE:
+// const bodyElement = document.getElementById('body');
+// if (bodyElement) { ... }
+
+// SAFER:
+// 1. Use custom prefixes for IDs to avoid DOM property collisions
+const safeBodyElement = document.getElementById('app-body');
+
+// 2. Validate element type after selection to ensure it's the expected element
+const element = document.getElementById(id);
+if (element && element instanceof HTMLDivElement) {
+  // It's safe to use this element
+}
+
+// 3. Use a safe getter function
+function safeGetElementById(id) {
+  // Avoid common DOM property names
+  const riskyIds = ['body', 'head', 'forms', 'length', 'name', 'id'];
+  if (riskyIds.includes(id)) {
+    console.error('Potentially unsafe element ID');
+    return null;
+  }
+  return document.getElementById(id);
+}`
+  },
+  
+  // JSON.parse with unvalidated input
+  {
+    type: "jsonParseVulnerability",
+    regex: /JSON\.parse\s*\(\s*(?!JSON\.stringify)(?:[^)]*(?:user|input|param|query|url|location|search|hash|get)[^)]*)\)/gi,
+    severity: "medium" as const,
+    title: "Unsafe JSON.parse Usage",
+    description: "Using JSON.parse with unvalidated input can lead to unexpected JavaScript execution in certain browsers or throw exceptions that could disrupt application flow.",
+    recommendation: "Always validate JSON input before parsing and implement proper error handling around JSON.parse operations.",
+    recommendationCode: `// UNSAFE:
+// const data = JSON.parse(userProvidedJsonString);
+
+// SAFER:
+function safeJsonParse(jsonString) {
+  // 1. Validate input type
+  if (typeof jsonString !== 'string') {
+    console.error('Invalid JSON input type');
+    return null;
+  }
+  
+  // 2. Validate JSON structure (optional additional validation)
+  if (!/^[\\[\\{].*[\\}\\]]$/.test(jsonString.trim())) {
+    console.error('Invalid JSON structure');
+    return null;
+  }
+  
+  // 3. Use try-catch to handle parsing errors
+  try {
+    const data = JSON.parse(jsonString);
+    
+    // 4. Optional: Validate parsed data against expected schema
+    // validateAgainstSchema(data);
+    
+    return data;
+  } catch (error) {
+    console.error('JSON parsing error:', error);
+    return null;
+  }
+}`
+  },
+  
+  // DOMParser with unvalidated input
+  {
+    type: "domParserVulnerability",
+    regex: /(?:new\s+DOMParser\(\))\.parseFromString\s*\(\s*(?:[^,]*(?:user|input|param|query|url|location|search|hash|get)[^,]*),/gi,
+    severity: "medium" as const,
+    title: "Unsafe DOMParser Usage",
+    description: "Using DOMParser with unvalidated input can create a DOM structure with scripts that, while not executed immediately, could be executed if added to the document.",
+    recommendation: "Sanitize HTML input before parsing with DOMParser or extract only the specific data needed from the parsed result.",
+    recommendationCode: `// UNSAFE:
+// const parser = new DOMParser();
+// const doc = parser.parseFromString(userProvidedHtml, 'text/html');
+// someElement.appendChild(doc.body.firstChild);
+
+// SAFER:
+import DOMPurify from 'dompurify';
+
+// Option 1: Sanitize before parsing
+const parser = new DOMParser();
+const sanitizedHtml = DOMPurify.sanitize(userProvidedHtml);
+const doc = parser.parseFromString(sanitizedHtml, 'text/html');
+
+// Option 2: Extract only text content or specific attributes
+function safeExtractFromHtml(html, selector, attribute = null) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const element = doc.querySelector(selector);
+  
+  if (!element) return null;
+  
+  // Extract attribute or text content safely
+  return attribute ? element.getAttribute(attribute) : element.textContent;
+}`
+  },
+  
   // Direct meta tag content assignment with user input - extra pattern
   {
     type: "directMetaTagContentAssignment",
