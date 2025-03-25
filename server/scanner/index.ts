@@ -10,7 +10,8 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 // Confidence threshold - vulnerabilities with lower scores will be excluded
-const CONFIDENCE_THRESHOLD = 0.35; // Lower threshold to catch more potential issues
+const CONFIDENCE_THRESHOLD = 0.30; // Lowered threshold to catch more potential issues, but still filter obvious false positives
+const LOW_CONFIDENCE_THRESHOLD = 0.25; // Even lower threshold for low severity issues to ensure they're reported
 
 /**
  * Advanced scanning engine for detecting XSS vulnerabilities in JavaScript code
@@ -83,8 +84,12 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     
     const confidence = calculateConfidenceScore(preparedCode, vul.match, vul.type);
     
-    // Only include vulnerabilities that meet our confidence threshold
-    if (confidence >= CONFIDENCE_THRESHOLD) {
+    // Apply different confidence thresholds based on severity
+    // Low severity issues get a lower threshold to ensure they're reported
+    const threshold = vul.pattern.severity === 'low' ? LOW_CONFIDENCE_THRESHOLD : CONFIDENCE_THRESHOLD;
+    
+    // Only include vulnerabilities that meet the appropriate confidence threshold
+    if (confidence >= threshold) {
       
       // Calculate line and column numbers
       const codeUpToMatch = preparedCode.substring(0, vul.index);

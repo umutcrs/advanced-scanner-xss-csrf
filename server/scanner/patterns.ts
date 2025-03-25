@@ -1961,5 +1961,696 @@ async function loadFeature() {
     console.error('Failed to load module:', err);
   }
 }`
+  },
+  // HTML attribute mutations
+  {
+    type: "htmlAttributeMutation",
+    regex: /\.setAttribute\s*\(\s*(['"`])(?:on\w+|srcdoc|style|formaction)\1\s*,\s*(?!['"]{2})/g,
+    severity: "high" as const,
+    title: "Dangerous HTML Attribute Mutation",
+    description: "Setting security-sensitive attributes on HTML elements can lead to XSS vulnerabilities when user input is used.",
+    recommendation: "Never set event handlers or security-sensitive attributes like 'srcdoc' or 'formaction' dynamically from user input.",
+    recommendationCode: `// AVOID setting sensitive attributes from user input:
+// element.setAttribute('onclick', userProvidedHandler);  // UNSAFE
+// element.setAttribute('srcdoc', userProvidedHTML);      // UNSAFE
+// element.setAttribute('style', userProvidedStyles);     // RISKY
+// element.setAttribute('formaction', userProvidedURL);   // UNSAFE
+
+// Instead, use proper event listeners:
+element.addEventListener('click', function(e) {
+  // Handle event safely with user data as a parameter, not as code
+  safeHandler(userProvidedData);
+});
+
+// For iframe content, use explicit document.write with sanitized content:
+const iframe = document.createElement('iframe');
+document.body.appendChild(iframe);
+const sanitizedHTML = DOMPurify.sanitize(userProvidedHTML);
+iframe.contentDocument.open();
+iframe.contentDocument.write(sanitizedHTML);
+iframe.contentDocument.close();
+
+// For styles, validate and sanitize:
+const validatedStyles = {};
+// Extract only safe properties
+if (/^[0-9]+px$/.test(userInput)) {
+  validatedStyles.width = userInput; // Only allow validated values
+}`
+  },
+  // HTML5 postMessage without origin check
+  {
+    type: "postMessageNoOriginCheck",
+    regex: /window\.addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)|[^,]*)\s*(?:\{[^{}]*\}|=>(?:[^{}]|\{[^{}]*\}))/g,
+    severity: "medium" as const,
+    title: "Missing Origin Check in postMessage Handler",
+    description: "Processing message events without checking the origin can lead to cross-origin attacks.",
+    recommendation: "Always verify the origin of messages before processing them to ensure they come from trusted sources.",
+    recommendationCode: `// UNSAFE: No origin check
+// window.addEventListener('message', (event) => {
+//   const data = event.data;
+//   document.getElementById('output').innerHTML = data.message;
+// });
+
+// SECURE: With proper origin validation
+window.addEventListener('message', (event) => {
+  // ALWAYS check origin before processing messages
+  const trustedOrigins = ['https://trusted-site.com', 'https://partner-site.org'];
+  
+  if (!trustedOrigins.includes(event.origin)) {
+    console.error('Received message from untrusted origin:', event.origin);
+    return; // Ignore messages from untrusted origins
+  }
+  
+  // Now safe to process the message
+  try {
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    // Use safe DOM manipulation
+    document.getElementById('output').textContent = data.message;
+  } catch (e) {
+    console.error('Error processing message:', e);
+  }
+});`
+  },
+  // Event handler injection
+  {
+    type: "eventHandlerInjection",
+    regex: /\[\s*['"]on\w+['"]\s*\]\s*=|\.on\w+\s*=\s*(?!function|null|undefined|false)/g,
+    severity: "high" as const,
+    title: "Event Handler Injection Vector",
+    description: "Assigning event handlers directly using user input is a common XSS vector that can execute arbitrary code.",
+    recommendation: "Use addEventListener and pass functions instead of strings. Never assign event handlers using user-controlled data.",
+    recommendationCode: `// AVOID these patterns:
+// element.onclick = userProvidedCode;                // UNSAFE
+// element['onclick'] = userProvidedCode;             // UNSAFE
+// element.setAttribute('onclick', userProvidedCode); // UNSAFE
+
+// INSTEAD, use proper event listeners:
+element.addEventListener('click', function(event) {
+  // Access user data here as a parameter
+  handleClick(userProvidedData);
+});
+
+// If you need dynamic handlers:
+const handlers = {
+  'edit': function() { /* edit functionality */ },
+  'delete': function() { /* delete functionality */ },
+  'view': function() { /* view functionality */ }
+};
+
+// Then safely use the predefined handler:
+const action = validateAction(userProvidedAction); // Validate to allowed values
+if (handlers.hasOwnProperty(action)) {
+  element.addEventListener('click', handlers[action]);
+}`
+  },
+  // Dynamic property assignment using bracket notation (common evasion technique)
+  {
+    type: "dynamicPropertyAssignment",
+    regex: /(?:window|document|location|localStorage|sessionStorage)\s*\[\s*(?:(?!['"]cookie['"])[^\]]*)\]\s*=\s*(?!null|undefined|false)/g,
+    severity: "medium" as const,
+    title: "Dynamic Global Property Assignment",
+    description: "Using bracket notation to dynamically set properties on security-sensitive objects can lead to XSS or prototype pollution.",
+    recommendation: "Avoid dynamically assigning properties to global objects, especially when the property name comes from user input.",
+    recommendationCode: `// UNSAFE pattern:
+// window[userProvidedProperty] = userProvidedValue;
+
+// SAFER approach - use a restricted object for custom properties:
+const safeStorage = {};
+
+function setProperty(key, value) {
+  // Validate key is allowed
+  const allowedKeys = ['username', 'preferences', 'theme', 'language'];
+  if (!allowedKeys.includes(key)) {
+    console.error('Attempt to set disallowed property:', key);
+    return false;
+  }
+  
+  // Validate value if needed
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+    console.error('Only primitive values allowed');
+    return false;
+  }
+  
+  // Now safe to store
+  safeStorage[key] = value;
+  return true;
+}
+
+// Usage:
+setProperty('theme', userSelectedTheme);`
+  },
+  // Base64 execution vectors (common obfuscation technique)
+  {
+    type: "base64Execution",
+    regex: /(?:eval|Function|setTimeout|setInterval)\s*\(\s*atob\s*\(|\(atob\(\s*['"][A-Za-z0-9+/=]+['"]\s*\)\s*\)/g,
+    severity: "critical" as const,
+    title: "Base64 Code Execution",
+    description: "Using atob() to decode and execute Base64-encoded strings is a common technique to hide malicious code from security scanners.",
+    recommendation: "Never execute code that comes from Base64-decoded strings, even if it seems harmless.",
+    recommendationCode: `// NEVER do these:
+// eval(atob(encodedScript));
+// setTimeout(atob(encodedCommand), 100);
+// new Function(atob(encodedCode))();
+
+// For legitimate Base64 data:
+function safelyDecodeBase64(encodedData) {
+  try {
+    // Decode but don't execute
+    const decoded = atob(encodedData);
+    
+    // Log for debugging/transparency
+    console.log('Decoded data:', decoded);
+    
+    // Process as data, not code
+    return decoded;
+  } catch (e) {
+    console.error('Invalid Base64 data:', e);
+    return null;
+  }
+}
+
+// Then use the decoded data for non-executable purposes
+const userData = safelyDecodeBase64(encodedUserData);
+document.getElementById('profile').textContent = userData;`
+  },
+  // WebSockets without validation 
+  {
+    type: "unsafeWebSocket",
+    regex: /new\s+WebSocket\s*\(\s*([^)]*)\)/g,
+    severity: "medium" as const,
+    title: "Potentially Unsafe WebSocket Connection",
+    description: "Creating WebSocket connections without proper URL validation or message handling can lead to data injection vulnerabilities.",
+    recommendation: "Validate WebSocket URLs and sanitize all incoming messages before processing them.",
+    recommendationCode: `// Instead of:
+// const ws = new WebSocket(userProvidedUrl);
+
+// Validate the WebSocket URL first:
+function createSecureWebSocket(url) {
+  // Ensure the URL is from an allowed domain
+  const allowedDomains = ['api.our-service.com', 'websocket.trusted-source.org'];
+  
+  try {
+    const wsUrl = new URL(url);
+    if (!allowedDomains.includes(wsUrl.hostname)) {
+      console.error('WebSocket connection to untrusted host rejected');
+      return null;
+    }
+    
+    // Now it's safer to connect
+    const ws = new WebSocket(url);
+    
+    // Set up message handling
+    ws.addEventListener('message', (event) => {
+      try {
+        // Validate and sanitize the data before using it
+        const data = JSON.parse(event.data);
+        
+        // Safe handling of the data
+        processValidatedWebSocketData(data);
+      } catch (e) {
+        console.error('Invalid WebSocket message:', e);
+      }
+    });
+    
+    return ws;
+  } catch (e) {
+    console.error('Invalid WebSocket URL:', e);
+    return null;
+  }
+}`
+  },
+  // URL API misuse
+  {
+    type: "urlAPIVulnerability",
+    regex: /URL\.createObjectURL\s*\(\s*(?:user|input|data|file|blob|new Blob)/gi,
+    severity: "high" as const,
+    title: "Unsafe Use of URL.createObjectURL",
+    description: "Creating object URLs from user-supplied data can lead to XSS and data exfiltration vulnerabilities.",
+    recommendation: "Validate file types and sanitize content before creating object URLs. Always revoke URLs after use.",
+    recommendationCode: `// UNSAFE pattern:
+// const objectUrl = URL.createObjectURL(userBlob);
+// frame.src = objectUrl;
+
+// SAFER approach:
+function createSafeObjectURL(file) {
+  // Validate file is of allowed type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
+  
+  if (!allowedTypes.includes(file.type)) {
+    console.error('Unsupported file type:', file.type);
+    return null;
+  }
+  
+  // Create the URL
+  const objectUrl = URL.createObjectURL(file);
+  
+  // Set up automatic revocation
+  setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 30000); // Revoke after 30 seconds or when no longer needed
+  
+  return objectUrl;
+}
+
+// Usage:
+const displayImage = (file) => {
+  const safeUrl = createSafeObjectURL(file);
+  if (safeUrl) {
+    const img = document.createElement('img');
+    img.onload = () => URL.revokeObjectURL(safeUrl); // Revoke immediately after load
+    img.src = safeUrl;
+    document.getElementById('preview').appendChild(img);
+  }
+};`
+  },
+  // client-side prototype pollution vectors
+  {
+    type: "prototypeContamination",
+    regex: /(?:Object\.prototype|__proto__|prototype)\s*\[\s*(['"`][^'"`]+['"`])\s*\]\s*=|\[\s*['"]__proto__['"]\s*\]\s*\[\s*(['"][^'"]+['"])\s*\]\s*=/g,
+    severity: "high" as const,
+    title: "Prototype Pollution Vector",
+    description: "Modifying Object.prototype or using __proto__ can lead to prototype pollution vulnerabilities that enable XSS attacks.",
+    recommendation: "Never modify built-in prototypes. Use Object.create(null) for safe dictionaries and implement secure object merge functions.",
+    recommendationCode: `// NEVER do these:
+// Object.prototype[userKey] = userValue;
+// obj.__proto__[userKey] = userValue;
+// obj["__proto__"]["toString"] = maliciousFunction;
+
+// SAFER object operations:
+
+// 1. Use Object.create(null) for dictionaries
+const safeDict = Object.create(null);
+safeDict[userKey] = userValue; // No prototype to pollute
+
+// 2. Safe object merging function
+function safeObjectMerge(target, source) {
+  // Skip __proto__ and prototype
+  const sanitizedSource = Object.entries(source)
+    .filter(([key]) => {
+      return key !== '__proto__' && 
+             key !== 'constructor' && 
+             key !== 'prototype';
+    })
+    .reduce((obj, [key, value]) => {
+      // For nested objects, recursively sanitize
+      if (value && typeof value === 'object') {
+        obj[key] = safeObjectMerge(
+          target[key] && typeof target[key] === 'object' ? target[key] : {}, 
+          value
+        );
+      } else {
+        obj[key] = value;
+      }
+      return obj;
+    }, {});
+  
+  // Now safely merge
+  return { ...target, ...sanitizedSource };
+}
+
+// Usage:
+const mergedConfig = safeObjectMerge(defaultConfig, userConfig);`
+  },
+  // Mutation observer usage (more advanced detection of DOM manipulation)
+  {
+    type: "unsafeMutationObserver",
+    regex: /new\s+MutationObserver\s*\(\s*(?:function\s*\([^)]*\)|[^,]*)\s*\)\s*\.observe\s*\(\s*document(?:\.body|\.documentElement)?/g,
+    severity: "medium" as const,
+    title: "Potentially Unsafe MutationObserver Usage",
+    description: "MutationObservers that watch the entire document can trigger on malicious DOM mutations, which can lead to security issues if not properly validated.",
+    recommendation: "Use MutationObservers on specific elements and validate changes to prevent unwanted behavior.",
+    recommendationCode: `// RISKY pattern:
+// new MutationObserver(callback).observe(document, { 
+//   childList: true, 
+//   subtree: true 
+// });
+
+// SAFER approach:
+// 1. Observe specific container elements, not the entire document
+const secureContainer = document.getElementById('safe-dynamic-content');
+
+// 2. Define careful validation in the callback
+const observer = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    // Check for added nodes
+    if (mutation.type === 'childList' && mutation.addedNodes.length) {
+      // Validate each added node
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          // Remove unsafe elements or attributes
+          sanitizeElement(node);
+        }
+      });
+    }
+  }
+});
+
+// Helper to sanitize elements
+function sanitizeElement(element) {
+  // Remove script tags entirely
+  if (element.tagName === 'SCRIPT') {
+    element.remove();
+    return;
+  }
+  
+  // Remove dangerous attributes
+  ['onclick', 'onerror', 'onload', 'onmouseover'].forEach(attr => {
+    if (element.hasAttribute(attr)) {
+      element.removeAttribute(attr);
+    }
+  });
+  
+  // Check src attributes
+  if (element.hasAttribute('src')) {
+    const src = element.getAttribute('src');
+    if (src.startsWith('javascript:') || src.startsWith('data:')) {
+      element.removeAttribute('src');
+    }
+  }
+  
+  // Recursively check children
+  Array.from(element.children).forEach(sanitizeElement);
+}
+
+// Start observing a specific container
+observer.observe(secureContainer, { 
+  childList: true, 
+  subtree: true 
+});`
+  },
+  // Meta tag injection
+  {
+    type: "metaTagInjection",
+    regex: /createElement\s*\(\s*['"]meta['"](?:(?!content).)*\.setAttribute\s*\(\s*['"]content['"]/g,
+    severity: "medium" as const,
+    title: "Potential Meta Tag Injection",
+    description: "Dynamically creating meta tags with user-controlled content can lead to client-side redirects or influence browser behavior.",
+    recommendation: "Validate all meta tag content and attributes rigorously before adding to the document.",
+    recommendationCode: `// UNSAFE pattern:
+// const meta = document.createElement('meta');
+// meta.setAttribute('http-equiv', 'refresh');
+// meta.setAttribute('content', '0;url=' + userProvidedUrl);
+// document.head.appendChild(meta);
+
+// SAFER approach:
+function safelyAddMetaTag(httpEquiv, content) {
+  // Validate http-equiv is allowed
+  const allowedHttpEquivs = ['content-type', 'default-style', 'x-ua-compatible'];
+  if (!allowedHttpEquivs.includes(httpEquiv.toLowerCase())) {
+    console.error('Prohibited meta http-equiv value:', httpEquiv);
+    return null;
+  }
+  
+  // For refresh http-equiv, validate the URL
+  if (httpEquiv.toLowerCase() === 'refresh' && content.includes('url=')) {
+    const urlMatch = /url=([^;,\s]+)/.exec(content);
+    if (urlMatch) {
+      const url = urlMatch[1];
+      // Validate URL is from allowed domains
+      const allowedDomains = ['example.com', 'trusted-site.org'];
+      try {
+        const parsedUrl = new URL(url);
+        if (!allowedDomains.includes(parsedUrl.hostname)) {
+          console.error('Meta refresh to untrusted domain:', parsedUrl.hostname);
+          return null;
+        }
+      } catch (e) {
+        console.error('Invalid URL in meta refresh:', url);
+        return null;
+      }
+    }
+  }
+  
+  // Create and add the meta tag
+  const meta = document.createElement('meta');
+  meta.setAttribute('http-equiv', httpEquiv);
+  meta.setAttribute('content', content);
+  document.head.appendChild(meta);
+  return meta;
+}`
+  },
+  // JavaScript source mapping exposure
+  {
+    type: "sourceMapExposure",
+    regex: /\/\/# sourceMappingURL=\S+\.map(?!\s*$)/,
+    severity: "low" as const,
+    title: "Source Map Exposure in Production",
+    description: "Exposing source maps in production can reveal sensitive implementation details and make the application more vulnerable to attacks.",
+    recommendation: "Remove source map references in production builds to prevent revealing source code structure to potential attackers.",
+    recommendationCode: `// Development build configuration
+const devConfig = {
+  // ... other config
+  devtool: 'source-map', // Enables source maps for debugging
+};
+
+// Production build configuration
+const prodConfig = {
+  // ... other config
+  devtool: false, // Disables source maps for production
+};
+
+// In your build script:
+const config = process.env.NODE_ENV === 'production' ? prodConfig : devConfig;
+
+// For webpack, you can also use terser to remove sourceMappingURL comments:
+// In webpack.config.js for production:
+const TerserPlugin = require('terser-webpack-plugin');
+
+module.exports = {
+  // ... other config
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            // ... other options
+          },
+          output: {
+            comments: false, // Removes sourceMappingURL comments
+          },
+        },
+      }),
+    ],
+  },
+}`
+  },
+  // DOM-based open redirect
+  {
+    type: "domBasedOpenRedirect",
+    regex: /(?:window\.location|location|document\.location|self\.location|top\.location|parent\.location)\s*=\s*(?!['"]https?:\/\/[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)[^;]*/g,
+    severity: "medium" as const,
+    title: "DOM-Based Open Redirect",
+    description: "Setting location without proper validation can lead to open redirect vulnerabilities that enable phishing attacks.",
+    recommendation: "Always validate URLs before using them for redirection, ensuring they point to trusted domains.",
+    recommendationCode: `// UNSAFE patterns:
+// window.location = userProvidedUrl;
+// location.href = params.get('redirect');
+// document.location = getRedirectUrl();
+
+// SAFER approach:
+function safeRedirect(url) {
+  // 1. Check if it's a relative URL (starts with / or ./)
+  if (/^(\\/|\\.\\/|\\.\\.\\/)/.test(url)) {
+    // Relative URLs are safe to redirect to
+    window.location.href = url;
+    return;
+  }
+  
+  // 2. For absolute URLs, validate the domain
+  try {
+    const parsedUrl = new URL(url);
+    
+    // Check against allowlist of trusted domains
+    const trustedDomains = [
+      'example.com',
+      'sub.example.com',
+      'trusted-partner.org'
+    ];
+    
+    // Check if the domain or any parent domain is trusted
+    let domain = parsedUrl.hostname;
+    const isDomainTrusted = trustedDomains.some(trusted => {
+      return domain === trusted || domain.endsWith('.' + trusted);
+    });
+    
+    if (isDomainTrusted) {
+      // Ensure protocol is http or https
+      if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+        window.location.href = url;
+        return;
+      }
+    }
+  } catch (e) {
+    // URL parsing failed, don't redirect
+    console.error('Invalid redirect URL:', url);
+  }
+  
+  // If we get here, the redirect wasn't safe
+  console.error('Unsafe redirect blocked:', url);
+  // Redirect to default page instead
+  window.location.href = '/home';
+}`
+  },
+  // Anchor href with dangerous URL
+  {
+    type: "dangerousAnchorHref",
+    regex: /\.href\s*=\s*(?!['"](?:https?:|mailto:|tel:|\/|#|\.\/))(?!\s*(?:DOMPurify|purify|sanitize|filter)\s*\()/ig,
+    severity: "medium" as const,
+    title: "Potentially Dangerous Link Target",
+    description: "Setting href attributes without proper validation can lead to javascript: URI or data: URI based XSS attacks.",
+    recommendation: "Validate all URLs before setting as href attributes. Ensure they use safe protocols like http:, https:, mailto:, or tel:.",
+    recommendationCode: `// UNSAFE patterns:
+// link.href = userInput;
+// document.getElementById('download').href = getFileUrl(fileName);
+
+// SAFER approach:
+function setLinkUrl(linkElement, url) {
+  // Function to validate URL safety
+  function isUrlSafe(url) {
+    // Safe if it's relative
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return true;
+    }
+    
+    // Check for safe protocols
+    const safeProtocols = ['http:', 'https:', 'mailto:', 'tel:'];
+    try {
+      const parsedUrl = new URL(url);
+      return safeProtocols.includes(parsedUrl.protocol);
+    } catch (e) {
+      // If parsing fails, it's not a valid URL
+      return false;
+    }
+  }
+  
+  // Remove dangerous protocols
+  function sanitizeUrl(url) {
+    // Simple cleaning for javascript: and data: URIs
+    if (/^(?:javascript|data|vbscript|file):/i.test(url)) {
+      return '#'; // Replace with harmless fragment
+    }
+    return url;
+  }
+  
+  // Check and set the URL
+  if (isUrlSafe(url)) {
+    linkElement.href = url;
+  } else {
+    console.error('Unsafe URL blocked:', url);
+    linkElement.href = '#'; // Set to safe default
+    // Optionally disable the link
+    linkElement.style.pointerEvents = 'none';
+    linkElement.style.color = 'gray';
+    linkElement.title = 'Link disabled - unsafe URL';
+  }
+}`
+  },
+  // Dynamic script creation without integrity checks
+  {
+    type: "dynamicScriptWithoutIntegrity",
+    regex: /document\.createElement\s*\(\s*['"]script['"](?![^]*integrity).*?\.src\s*=\s*(?!['"]https:\/\/)/g,
+    severity: "low" as const,
+    title: "Dynamic Script Without Integrity Checks",
+    description: "Creating script elements without subresource integrity checks can lead to supply chain attacks if the source is compromised.",
+    recommendation: "Use Subresource Integrity (SRI) checks when loading external scripts to ensure they haven't been tampered with.",
+    recommendationCode: `// UNSAFE pattern:
+// const script = document.createElement('script');
+// script.src = 'https://third-party-cdn.com/library.js';
+// document.head.appendChild(script);
+
+// SAFER approach with SRI:
+function loadScriptWithIntegrity(src, integrity) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    
+    // Set integrity and crossorigin attributes
+    if (integrity && src.startsWith('https://')) {
+      script.integrity = integrity;
+      script.crossOrigin = 'anonymous';
+    } else if (!src.startsWith('https://')) {
+      console.warn('Non-HTTPS script source detected');
+    } else if (!integrity) {
+      console.warn('Missing integrity hash for external script');
+    }
+    
+    // Set up load/error handlers
+    script.onload = () => resolve(script);
+    script.onerror = () => reject(new Error(\`Failed to load script: \${src}\`));
+    
+    // Set source last (after event handlers)
+    script.src = src;
+    
+    // Add to document
+    document.head.appendChild(script);
+  });
+}
+
+// Usage:
+loadScriptWithIntegrity(
+  'https://cdn.example.com/library.js',
+  'sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC'
+).then(() => {
+  console.log('Script loaded successfully!');
+}).catch(error => {
+  console.error('Script load failed:', error);
+});
+
+// To generate integrity hashes for your scripts:
+// 1. Use a tool like https://www.srihash.org/
+// 2. Or generate via command line:
+//    cat library.js | openssl dgst -sha384 -binary | openssl base64 -A`
+  },
+  // Insecure randomness
+  {
+    type: "insecureRandomness",
+    regex: /Math\.random\s*\(\s*\)(?:(?!\.toString).)*(password|token|secret|key|auth|crypt)/gi,
+    severity: "medium" as const,
+    title: "Insecure Randomness for Security-Critical Values",
+    description: "Using Math.random() for security-sensitive values like tokens or passwords creates predictable values vulnerable to attack.",
+    recommendation: "Use crypto.getRandomValues() or window.crypto.subtle.generateKey() for security-critical random values.",
+    recommendationCode: `// UNSAFE patterns:
+// const token = Math.random().toString(36).substring(2);
+// const tempPassword = Math.random().toString(16).substring(2, 10);
+
+// SAFER approaches:
+// 1. For random tokens/IDs:
+function generateSecureToken(length = 32) {
+  // Create a typed array of required length
+  const randomArray = new Uint8Array(length);
+  
+  // Fill with cryptographically strong random values
+  window.crypto.getRandomValues(randomArray);
+  
+  // Convert to string (various options)
+  // Option 1: Hex encoding
+  return Array.from(randomArray)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+    
+  // Option 2: Base64 encoding
+  // return btoa(String.fromCharCode.apply(null, randomArray))
+  //   .replace(/\\+/g, '-')
+  //   .replace(/\\//g, '_')
+  //   .replace(/=/g, '');
+}
+
+// 2. For cryptographic keys:
+async function generateEncryptionKey() {
+  // Generate a proper cryptographic key
+  const key = await window.crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256
+    },
+    true, // extractable
+    ['encrypt', 'decrypt']
+  );
+  
+  return key;
+}
+
+// Usage:
+const secureToken = generateSecureToken();
+document.getElementById('csrf-token').value = secureToken;`
   }
 ];

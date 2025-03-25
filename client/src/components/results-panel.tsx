@@ -80,7 +80,7 @@ export default function ResultsPanel({ results, isScanning }: ResultsPanelProps)
           {/* Summary Section */}
           <div className="p-4">
             <h4 className="text-base font-medium text-gray-900 mb-3">Summary</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div className="bg-red-50 p-3 rounded-lg">
                 <div className="text-critical text-2xl font-bold">{results.summary.critical}</div>
                 <div className="text-sm text-gray-700">Critical</div>
@@ -92,6 +92,10 @@ export default function ResultsPanel({ results, isScanning }: ResultsPanelProps)
               <div className="bg-yellow-50 p-3 rounded-lg">
                 <div className="text-medium text-2xl font-bold">{results.summary.medium}</div>
                 <div className="text-sm text-gray-700">Medium</div>
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-blue-500 text-2xl font-bold">{results.summary.low}</div>
+                <div className="text-sm text-gray-700">Low</div>
               </div>
               <div className="bg-green-50 p-3 rounded-lg">
                 <div className="text-success text-2xl font-bold">{results.summary.passedChecks}</div>
