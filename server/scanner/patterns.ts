@@ -942,5 +942,352 @@ function addSafeParam(params, name, value) {
 const params = new URLSearchParams();
 addSafeParam(params, 'q', userInput);
 someElement.src = 'https://example.com/search?' + params.toString();`
+  },
+  
+  // Advanced DOM-based XSS vulnerabilities with CSP bypass
+  {
+    type: "trustedTypesEscape",
+    regex: /TrustedHTML\.unsafelyCreate\s*\(\s*([^)]*)\)/g,
+    severity: "critical" as const,
+    title: "Trusted Types Policy Bypass",
+    description: "Using TrustedHTML.unsafelyCreate bypasses the entire Trusted Types protection, allowing direct script execution even with CSP in place.",
+    recommendation: "Never use the unsafelyCreate method in production. Use proper sanitization and create specific Trusted Types policies.",
+    recommendationCode: `// Instead of using unsafelyCreate method:
+// const html = TrustedHTML.unsafelyCreate(userInput);
+
+// Define a proper Trusted Types policy:
+const myPolicy = trustedTypes.createPolicy('my-sanitizer', {
+  createHTML: (input) => {
+    const sanitized = DOMPurify.sanitize(input);
+    return sanitized;
+  }
+});
+
+// Then use the policy to create trusted HTML:
+const trustedHtml = myPolicy.createHTML(userInput);
+element.innerHTML = trustedHtml; // Safe with proper policy`
+  },
+  {
+    type: "domClobbering",
+    regex: /\.namedItem\s*\(\s*([^)]*)\)|\.getElementById\s*\(\s*['"]([^'"]*)['"]\s*\)\s*\|\|\s*.+/g,
+    severity: "medium" as const,
+    title: "Potential DOM Clobbering Vulnerability",
+    description: "DOM Clobbering is a type of attack that uses HTML to override properties/elements that scripts expect, potentially enabling XSS despite CSP.",
+    recommendation: "Always check the type of the returned object from DOM lookups and never use the || operator to provide fallbacks for DOM lookups.",
+    recommendationCode: `// Instead of:
+const config = document.getElementById('config') || { settings: defaultSettings };
+
+// Do type checking:
+const configElement = document.getElementById('config');
+const config = configElement instanceof HTMLElement ? 
+  JSON.parse(configElement.textContent || '{}') : 
+  { settings: defaultSettings };
+
+// Or for namedItem:
+const item = document.getElementsByName('user')[0];
+if (item && item instanceof HTMLInputElement) {
+  // Now it's safe to use
+  console.log(item.value);
+}`
+  },
+  {
+    type: "baseHref",
+    regex: /document\.getElementsByTagName\s*\(\s*['"]base['"]\s*\)\s*\[\s*0\s*\]\.href\s*=\s*([^;]*)/g,
+    severity: "high" as const,
+    title: "Dynamic Base Tag Modification",
+    description: "Modifying the base tag href attribute can redirect relative URLs to an attacker-controlled domain, enabling complex XSS attacks.",
+    recommendation: "Never dynamically modify the base tag. If necessary, validate the URL against a strict whitelist.",
+    recommendationCode: `// Don't modify base href dynamically:
+// document.getElementsByTagName('base')[0].href = userInput;
+
+// If necessary, use a whitelist approach:
+function setBaseUrl(url) {
+  const allowedDomains = ['example.com', 'api.myapp.com', 'cdn.myapp.com'];
+  
+  try {
+    const parsed = new URL(url);
+    if (allowedDomains.includes(parsed.hostname)) {
+      // Use the original base element or create if it doesn't exist
+      let baseElement = document.getElementsByTagName('base')[0];
+      if (!baseElement) {
+        baseElement = document.createElement('base');
+        document.head.appendChild(baseElement);
+      }
+      baseElement.href = url;
+    } else {
+      console.error('Domain not in whitelist');
+    }
+  } catch (e) {
+    console.error('Invalid URL');
+  }
+}`
+  },
+  {
+    type: "jsonpCallback",
+    regex: /[?&](callback|jsonp)=([^&]+)/g,
+    severity: "high" as const,
+    title: "JSONP Callback Parameter Injection",
+    description: "When implementing JSONP endpoints, callback parameter validation is critical to prevent XSS attacks through the dynamically generated script.",
+    recommendation: "Always validate JSONP callback parameter against a strict regex pattern allowing only alphanumeric characters and some basic symbols.",
+    recommendationCode: `// Server-side JSONP callback validation (Node.js example)
+function validateJsonpCallback(callback) {
+  const validPattern = /^[a-zA-Z0-9_$.]+$/;
+  return validPattern.test(callback) ? callback : 'defaultCallback';
+}
+
+app.get('/api/jsonp', (req, res) => {
+  const data = { message: 'Hello world' };
+  const callback = validateJsonpCallback(req.query.callback);
+  
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(\`\${callback}(\${JSON.stringify(data)})\`);
+});`
+  },
+  {
+    type: "cssExpressionInjection",
+    regex: /\.style\.cssText\s*=\s*([^;]*)|element\.style\s*=\s*(['"]expression\s*\([^)]*\))/g,
+    severity: "medium" as const,
+    title: "CSS Expression/Style Injection",
+    description: "Setting cssText or style directly with unsanitized input allows XSS via CSS expressions in older IE browsers and may leak data via advanced CSS selectors.",
+    recommendation: "Sanitize CSS before setting style properties or use individual property assignment instead of bulk style setting.",
+    recommendationCode: `// Instead of:
+element.style.cssText = userInput;
+
+// Set individual properties after validation:
+function setElementStyles(element, stylesObj) {
+  const allowedProps = ['color', 'backgroundColor', 'fontSize', 'margin', 'padding'];
+  
+  Object.keys(stylesObj).forEach(prop => {
+    if (allowedProps.includes(prop)) {
+      // Validate values based on property type
+      const value = stylesObj[prop];
+      
+      // Example validation for color
+      if (prop === 'color' || prop === 'backgroundColor') {
+        // Allow only valid color formats
+        if (/^(#[0-9a-f]{3,6}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[0-1](\.\d+)?\s*\)|[a-z-]+)$/i.test(value)) {
+          element.style[prop] = value;
+        }
+      } else {
+        // Basic sanitization for other properties
+        element.style[prop] = value.replace(/expression|javascript|behavior|calc|url/gi, '');
+      }
+    }
+  });
+}`
+  },
+  {
+    type: "htmlTemplateInjection",
+    regex: /document\.createElement\s*\(\s*['"]template['"]\s*\)[\s\S]{0,50}\.innerHTML\s*=\s*([^;]*)/g,
+    severity: "high" as const,
+    title: "HTML Template Element Injection",
+    description: "Setting innerHTML on a template element can lead to XSS when the template content is later cloned and added to the document.",
+    recommendation: "Sanitize any HTML before inserting it into a template element, even though templates aren't directly rendered.",
+    recommendationCode: `// Instead of:
+const template = document.createElement('template');
+template.innerHTML = userInput;
+
+// Sanitize the input:
+const template = document.createElement('template');
+template.innerHTML = DOMPurify.sanitize(userInput, {
+  RETURN_DOM_FRAGMENT: false,
+  RETURN_DOM: false
+});
+
+// Then use it safely:
+const clone = document.importNode(template.content, true);
+document.body.appendChild(clone);`
+  },
+  {
+    type: "dynamicScriptInjection",
+    regex: /document\.write\s*\(\s*['"]<script[^>]*>['"]\s*\+\s*([^+]*)\s*\+\s*['"]<\/script>['"]\s*\)/g,
+    severity: "critical" as const,
+    title: "Dynamic Script Tag Injection",
+    description: "Creating script tags with unvalidated content allows direct code execution regardless of the context.",
+    recommendation: "Never use document.write to inject scripts. Use safer alternatives like fetch for AJAX operations.",
+    recommendationCode: `// Instead of:
+document.write('<script>' + userInput + '</script>');
+
+// Fetch data from API:
+fetch('/api/data')
+  .then(response => response.json())
+  .then(data => {
+    // Handle the data safely
+    processData(data);
+  })
+  .catch(error => {
+    console.error('Error fetching data:', error);
+  });
+
+// If you need to load external scripts, use a whitelist:
+function loadScript(url) {
+  const trustedDomains = ['cdn.example.com', 'api.example.org'];
+  try {
+    const parsedUrl = new URL(url);
+    if (trustedDomains.includes(parsedUrl.hostname)) {
+      const script = document.createElement('script');
+      script.src = url;
+      document.head.appendChild(script);
+    }
+  } catch (e) {
+    console.error('Invalid URL');
+  }
+}`
+  },
+  {
+    type: "angularTemplateInjection",
+    regex: /\{\{(.+?)(?:\| trustAs(?:Html|Js|ResourceUrl))*\}\}/g,
+    severity: "critical" as const,
+    title: "Angular Template Injection",
+    description: "Angular expressions within {{ }} can lead to XSS if unsanitized input is used, especially when bypassing Angular's built-in sanitization with pipes like trustAsHtml.",
+    recommendation: "Never use the Angular trustAs* pipes with user input. Use Angular's [innerHTML] with DomSanitizer when needed.",
+    recommendationCode: `// In Angular component:
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
+export class MyComponent {
+  userContent: string;
+  safeContent: SafeHtml;
+  
+  constructor(private sanitizer: DomSanitizer) {}
+  
+  // Use this approach when you must render HTML
+  processUserContent(content: string): void {
+    // Sanitize the HTML
+    this.userContent = content;
+    
+    // Angular will sanitize this automatically when using [innerHTML]
+    // Only bypass for known safe content
+    if (this.isFromTrustedSource(content)) {
+      this.safeContent = this.sanitizer.bypassSecurityTrustHtml(content);
+    }
+  }
+  
+  private isFromTrustedSource(content: string): boolean {
+    // Implement validation logic here
+    return false; // Default to safe approach
+  }
+}
+
+// In template:
+// <div [innerHTML]="safeContent"></div>`
+  },
+  {
+    type: "prototypeExpando",
+    regex: /Object\.prototype\.__(?:defineGetter|defineSetter|lookupGetter|lookupSetter|proto)__\s*=\s*([^;]*)/g,
+    severity: "critical" as const,
+    title: "Prototype Pollution via Special Properties",
+    description: "Modifying Object.prototype with special properties like __proto__ can enable advanced prototype pollution attacks leading to XSS.",
+    recommendation: "Never modify Object.prototype directly. Use Object.create(null) for maps to avoid prototype inheritance issues.",
+    recommendationCode: `// Instead of objects with inherited prototype:
+const userDataMap = {}; // Vulnerable to prototype pollution
+
+// Use Object.create(null) to create objects without prototype:
+const safeMap = Object.create(null);
+
+// When handling JSON:
+function safeParseJson(jsonString) {
+  try {
+    // Parse the JSON
+    const parsed = JSON.parse(jsonString);
+    
+    // Recursively freeze objects to prevent modifications
+    function deepFreeze(obj) {
+      if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
+        Object.freeze(obj);
+        Object.getOwnPropertyNames(obj).forEach(prop => deepFreeze(obj[prop]));
+      }
+      return obj;
+    }
+    
+    return deepFreeze(parsed);
+  } catch (e) {
+    console.error('Invalid JSON', e);
+    return null;
+  }
+}`
+  },
+  {
+    type: "jqueryHtmlMethod",
+    regex: /\$\(.*\)\.html\(\s*([^)]*)\)/g,
+    severity: "high" as const,
+    title: "jQuery .html() Method Misuse",
+    description: "Using jQuery's .html() method with unfiltered user input allows XSS attacks similar to innerHTML.",
+    recommendation: "Use .text() instead of .html() or sanitize content before using .html().",
+    recommendationCode: `// Instead of:
+$('#element').html(userInput);
+
+// Use text() for displaying user content:
+$('#element').text(userInput);
+
+// Or sanitize if HTML is required:
+$('#element').html(DOMPurify.sanitize(userInput));
+
+// For templating, prefer a safe approach:
+const template = $('#template').html();
+const rendered = template
+  .replace('{{safeContent}}', escapeHtml(userInput.content))
+  .replace('{{safeTitle}}', escapeHtml(userInput.title));
+$('#element').html(rendered);
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}`
+  },
+  {
+    type: "vulnerableJsonParse",
+    regex: /JSON\.parse\s*\(\s*([^)]*)\)/g,
+    severity: "medium" as const,
+    title: "Unsafe JSON Parsing",
+    description: "Parsing JSON from untrusted sources can lead to prototype pollution or DoS attacks with carefully crafted payloads.",
+    recommendation: "Always validate JSON structure and use a JSON schema validator before parsing sensitive data.",
+    recommendationCode: `// Import a JSON schema validator like Ajv
+import Ajv from 'ajv';
+
+// Define a schema for expected JSON structure
+const userSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number' },
+    name: { type: 'string', maxLength: 100 },
+    email: { type: 'string', format: 'email' },
+    preferences: {
+      type: 'object',
+      properties: {
+        theme: { type: 'string', enum: ['light', 'dark', 'system'] },
+        notifications: { type: 'boolean' }
+      },
+      additionalProperties: false
+    }
+  },
+  required: ['id', 'name', 'email'],
+  additionalProperties: false
+};
+
+// Safely parse and validate JSON
+function safeJsonParse(jsonString) {
+  try {
+    // First parse the JSON
+    const data = JSON.parse(jsonString);
+    
+    // Then validate against schema
+    const ajv = new Ajv();
+    const validate = ajv.compile(userSchema);
+    
+    if (validate(data)) {
+      return data;
+    } else {
+      console.error('Invalid data structure:', validate.errors);
+      return null;
+    }
+  } catch (e) {
+    console.error('JSON parsing error:', e);
+    return null;
+  }
+}`
   }
 ];
