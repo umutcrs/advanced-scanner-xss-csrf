@@ -1430,5 +1430,536 @@ function safeJsonParse(jsonString) {
     return null;
   }
 }`
+  },
+  
+  // modern DOM-based XSS vulnerabilities
+  {
+    type: "shadowDomInnerHTML",
+    regex: /shadowRoot\.innerHTML\s*=\s*([^;]*)/g,
+    severity: "critical" as const,
+    title: "Shadow DOM innerHTML Injection",
+    description: "Setting innerHTML on shadowRoot can lead to XSS vulnerabilities, even though Shadow DOM provides some level of isolation.",
+    recommendation: "Avoid using innerHTML with Shadow DOM. Use standard DOM manipulation methods or lit-html templates instead.",
+    recommendationCode: `// Instead of shadowRoot.innerHTML = userInput
+const shadowRoot = element.attachShadow({mode: 'open'});
+
+// Use append with text nodes
+const text = document.createTextNode(userInput);
+shadowRoot.append(text);
+
+// Or for more complex content use lit-html or other template libraries
+import {html, render} from 'lit-html';
+const template = html\`<div>\${userInput}</div>\`;
+render(template, shadowRoot);`
+  },
+  {
+    type: "customElementInnerHTML",
+    regex: /customElements\.define\s*\([^{]*\{[^}]*innerHTML\s*=[^}]*\}/g,
+    severity: "high" as const,
+    title: "Custom Element innerHTML Manipulation",
+    description: "Using innerHTML within Custom Elements can lead to XSS vulnerabilities if user input is not properly sanitized.",
+    recommendation: "Use textContent instead of innerHTML or properly sanitize the input before using innerHTML in custom elements.",
+    recommendationCode: `// In a custom element class
+class SafeElement extends HTMLElement {
+  constructor() {
+    super();
+    
+    // Use a shadow root for encapsulation
+    const shadow = this.attachShadow({mode: 'open'});
+    
+    // Create a safe span element
+    const content = document.createElement('span');
+    
+    // Use textContent instead of innerHTML
+    content.textContent = this.getAttribute('data-content') || '';
+    
+    // Append to shadow DOM
+    shadow.appendChild(content);
+  }
+}
+
+customElements.define('safe-element', SafeElement);`
+  },
+  {
+    type: "domPurifyBypass",
+    regex: /DOMPurify\.sanitize\s*\([^)]*\{[^}]*RETURN_DOM\s*:\s*true[^}]*\}/g,
+    severity: "medium" as const,
+    title: "Potential DOMPurify Configuration Risk",
+    description: "Using DOMPurify with RETURN_DOM option can potentially lead to DOM Clobbering attacks if not properly configured.",
+    recommendation: "When using DOMPurify with RETURN_DOM, also set SANITIZE_DOM: true and ensure you're using the latest version of DOMPurify.",
+    recommendationCode: `// Safer DOMPurify configuration
+const clean = DOMPurify.sanitize(userInput, {
+  RETURN_DOM: true,
+  SANITIZE_DOM: true, // Prevents DOM clobbering
+  FORBID_TAGS: ['script', 'style', 'iframe', 'frame', 'object', 'embed'],
+  FORBID_ATTR: ['srcset', 'action', 'formaction', 'xlink:href']
+});
+
+// Or better yet, if you don't need a DOM:
+const cleanHTML = DOMPurify.sanitize(userInput);
+element.innerHTML = cleanHTML;`
+  },
+  // Framework-specific XSS attacks
+  {
+    type: "reactDangerSetHTML",
+    regex: /<div[^>]*dangerouslySetInnerHTML\s*=\s*\{\s*\{[^}]*__html\s*:/g,
+    severity: "critical" as const,
+    title: "React dangerouslySetInnerHTML Direct Usage",
+    description: "Direct JSX usage of dangerouslySetInnerHTML creates risk of XSS attacks if the input is not properly sanitized.",
+    recommendation: "Always sanitize content with a library like DOMPurify before using dangerouslySetInnerHTML.",
+    recommendationCode: `import DOMPurify from 'dompurify';
+
+function SafeHTML({ content }) {
+  const sanitizedContent = DOMPurify.sanitize(content);
+  
+  return <div dangerouslySetInnerHTML={{ __html: sanitizedContent }} />;
+}`
+  },
+  {
+    type: "angularTemplateInjection",
+    regex: /\[\[innerHTML\]\]\s*=\s*"[^"]*"/g,
+    severity: "critical" as const,
+    title: "Angular Template Injection",
+    description: "Using [innerHTML] in Angular templates can lead to XSS vulnerabilities with unsanitized input.",
+    recommendation: "Use Angular's built-in DomSanitizer to mark trusted HTML, and prefer to use property binding with textContent instead.",
+    recommendationCode: `// In component TypeScript file
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
+export class MyComponent {
+  rawHtml: string = '<some html from user>';
+  safeHtml: SafeHtml;
+  
+  constructor(private sanitizer: DomSanitizer) {
+    // Only use bypassSecurityTrustHtml when you absolutely need HTML
+    // and have properly validated/sanitized the input
+    this.safeHtml = this.sanitizer.bypassSecurityTrustHtml(this.rawHtml);
+  }
+}
+
+// In template
+<div [innerHTML]="safeHtml"></div>
+
+// Best approach - don't use innerHTML at all if possible
+<div>{{ textContent }}</div>`
+  },
+  {
+    type: "vueTemplateInjection",
+    regex: /v-html\s*=\s*(?:"|')?[^"'<>]*(?:"|')?/g,
+    severity: "high" as const,
+    title: "Vue v-html Directive Misuse",
+    description: "Using v-html directive in Vue templates with unsanitized user input can lead to XSS vulnerabilities.",
+    recommendation: "Avoid v-html with user-generated content. Use v-text or mustache syntax instead, or sanitize HTML with DOMPurify before binding.",
+    recommendationCode: `// Instead of:
+<div v-html="userProvidedContent"></div>
+
+// Use v-text or mustache syntax:
+<div v-text="userProvidedContent"></div>
+<div>{{ userProvidedContent }}</div>
+
+// If HTML is necessary, sanitize first:
+<script>
+import DOMPurify from 'dompurify';
+
+export default {
+  data() {
+    return {
+      rawContent: '<user content>'
+    }
+  },
+  computed: {
+    safeContent() {
+      return DOMPurify.sanitize(this.rawContent);
+    }
+  }
+}
+</script>
+
+<template>
+  <div v-html="safeContent"></div>
+</template>`
+  },
+  // Advanced JavaScript context XSS
+  {
+    type: "postMessageXSS",
+    regex: /window\.addEventListener\s*\(\s*["']message["']\s*,\s*(?:function\s*\([^)]*\)|[^,]*)\s*\{[^}]*innerHTML/gs,
+    severity: "high" as const,
+    title: "Insecure postMessage Handler",
+    description: "Using innerHTML with data received from postMessage without proper origin checking and content validation can lead to XSS.",
+    recommendation: "Always validate origin and sanitize data from postMessage before using it in the DOM.",
+    recommendationCode: `// Secure postMessage handler
+window.addEventListener('message', function(event) {
+  // Always validate origin
+  if (event.origin !== 'https://trusted-site.com') {
+    console.error('Received message from untrusted origin:', event.origin);
+    return;
+  }
+  
+  try {
+    // Validate the data structure
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid message format');
+    }
+    
+    // Process the data safely
+    if (data.type === 'update-content') {
+      // Use textContent instead of innerHTML
+      document.getElementById('message').textContent = data.content;
+    }
+  } catch (error) {
+    console.error('Error processing message:', error);
+  }
+});`
+  },
+  {
+    type: "jsonpVulnerability",
+    regex: /document\.createElement\s*\(\s*["']script["']\s*\)[^;]*\.src\s*=\s*(?!["']https?:\/\/[^"']+\.js["'])/g,
+    severity: "high" as const,
+    title: "Insecure JSONP Implementation",
+    description: "Dynamic script creation for JSONP without proper URL validation can lead to XSS vulnerabilities.",
+    recommendation: "Validate the JSONP URL and specify callback parameter name explicitly. Prefer using fetch with CORS instead of JSONP when possible.",
+    recommendationCode: `// Safer JSONP implementation
+function loadJSONP(url, callback) {
+  // Validate URL
+  if (!url.startsWith('https://trusted-api.com/') || url.includes('javascript:')) {
+    console.error('Invalid or untrusted JSONP URL');
+    return;
+  }
+  
+  // Create a unique callback name
+  const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+  
+  // Create script element
+  const script = document.createElement('script');
+  
+  // Clean up after execution
+  window[callbackName] = function(data) {
+    delete window[callbackName];
+    document.body.removeChild(script);
+    callback(data);
+  };
+  
+  // Add callback parameter to URL
+  const separator = url.includes('?') ? '&' : '?';
+  script.src = \`\${url}\${separator}callback=\${callbackName}\`;
+  
+  // Append to document
+  document.body.appendChild(script);
+}
+
+// Even better - use fetch with CORS instead when possible:
+async function fetchData(url) {
+  try {
+    const response = await fetch('https://trusted-api.com/data', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching data:', error);
+  }
+}`
+  },
+  // DOM Clobbering based XSS
+  {
+    type: "domClobbering",
+    regex: /getElementById\s*\(\s*['"](?:body|head|forms|anchors)['"].*?\)/g,
+    severity: "medium" as const,
+    title: "Potential DOM Clobbering Vulnerability",
+    description: "Using getElementById with certain reserved names can be exploited through DOM Clobbering attacks to bypass security measures.",
+    recommendation: "Avoid using common DOM property names as element IDs and validate element types after selection.",
+    recommendationCode: `// Instead of directly trusting getElementById for sensitive operations
+const element = document.getElementById('forms');
+
+// Add type checking
+if (element && element instanceof HTMLElement && !(element instanceof HTMLFormElement)) {
+  // Now we know it's a regular element, not a clobbered DOM property
+  // Safe to proceed
+  element.textContent = 'Content updated safely';
+}
+
+// Better yet, use more specific selectors or add a prefix to your IDs
+// to avoid collision with DOM properties
+const safeElement = document.getElementById('app-forms');
+`
+  },
+  // Local storage based XSS
+  {
+    type: "localStorageXSS",
+    regex: /localStorage\.getItem\s*\([^)]*\)(?:(?!\.replace|!=|!==|===|==|[!=]=\s*null).)*(?:innerHTML|outerHTML|document\.write)/gs,
+    severity: "high" as const,
+    title: "Unsafe localStorage Data Usage",
+    description: "Using localStorage data without sanitization in HTML contexts can lead to stored XSS vulnerabilities.",
+    recommendation: "Always sanitize data retrieved from localStorage before inserting it into the DOM.",
+    recommendationCode: `// Instead of:
+const userData = localStorage.getItem('userData');
+document.getElementById('profile').innerHTML = userData;
+
+// Sanitize the data first:
+const userData = localStorage.getItem('userData');
+if (userData) {
+  // Option 1: Use textContent for plain text
+  document.getElementById('profile').textContent = userData;
+  
+  // Option 2: If HTML is needed, sanitize properly
+  import DOMPurify from 'dompurify';
+  document.getElementById('profile').innerHTML = DOMPurify.sanitize(userData);
+}`
+  },
+  // Client-side template injection
+  {
+    type: "templateInjection",
+    regex: /new\s+(?:Function|Function\s*\()\s*\(\s*(['"`]).*?\$\{.*?\1\s*\)/gs,
+    severity: "critical" as const,
+    title: "Client-side Template Injection",
+    description: "Creating functions with template literals that incorporate user input can lead to code execution vulnerabilities.",
+    recommendation: "Never use template literals with Function constructor. Use safe templating libraries instead.",
+    recommendationCode: `// Instead of dangerous template execution:
+// const template = \`<div>\${userInput}</div>\`;
+// const renderTemplate = new Function('return \`' + template + '\`')();
+
+// Use a safe templating approach:
+import { sanitize } from 'dompurify';
+
+// Option 1: Simple replacement with sanitization
+function safeTemplate(template, data) {
+  // First sanitize all data values
+  const sanitizedData = {};
+  for (const key in data) {
+    if (Object.prototype.hasOwnProperty.call(data, key)) {
+      sanitizedData[key] = typeof data[key] === 'string' 
+        ? sanitize(data[key])
+        : data[key];
+    }
+  }
+  
+  // Then do simple replacements
+  return template.replace(/\\{\\{([^}]+)\\}\\}/g, (match, key) => {
+    return sanitizedData[key.trim()] || '';
+  });
+}
+
+// Usage:
+const template = '<div>{{userName}}</div>';
+const result = safeTemplate(template, { userName: userInput });
+element.innerHTML = result;
+
+// Option 2: Use established template libraries like Handlebars
+// that have security built in`
+  },
+  // Modern browser API XSS vectors
+  {
+    type: "trustedTypesViolation",
+    regex: /Element\.prototype\.innerHTML\s*=\s*([^;]*)/g,
+    severity: "high" as const,
+    title: "Potential Trusted Types Bypass",
+    description: "Overriding Element.prototype.innerHTML can bypass Trusted Types policy protections in modern browsers.",
+    recommendation: "Never override built-in DOM property setters. Use proper Trusted Types policies instead.",
+    recommendationCode: `// Instead of dangerous prototype manipulation:
+// Element.prototype.innerHTML = function(value) { /* custom implementation */ };
+
+// Use proper Trusted Types:
+if (window.trustedTypes && window.trustedTypes.createPolicy) {
+  // Create a policy
+  const sanitizePolicy = window.trustedTypes.createPolicy('sanitize-html', {
+    createHTML: (string) => DOMPurify.sanitize(string)
+  });
+  
+  // Use the policy
+  const element = document.getElementById('content');
+  element.innerHTML = sanitizePolicy.createHTML(userInput);
+} else {
+  // Fallback for browsers without Trusted Types support
+  const element = document.getElementById('content');
+  element.innerHTML = DOMPurify.sanitize(userInput);
+}`
+  },
+  // DOM-XSS through SVG
+  {
+    type: "svgScriptInsertion",
+    regex: /(?:document\.createElementNS\s*\([\'"](http:\/\/www\.w3\.org\/2000\/svg)[\'"],\s*[\'"]script[\'"]\)|<svg[^>]*><script[^>]*>)/g,
+    severity: "critical" as const,
+    title: "SVG Script Insertion",
+    description: "SVG can contain embedded scripts which will execute when injected into the DOM, creating XSS vulnerabilities.",
+    recommendation: "Sanitize SVG content before inserting it into the DOM or use SVG viewers that strip script content.",
+    recommendationCode: `// Option 1: Clean SVG before inserting
+import DOMPurify from 'dompurify';
+
+// Configure DOMPurify to handle SVG
+DOMPurify.addHook('afterSanitizeAttributes', function(node) {
+  // Remove potentially dangerous attributes or event handlers
+  if (node.tagName === 'SVG' || node.namespaceURI === 'http://www.w3.org/2000/svg') {
+    if (node.hasAttribute('onload') || node.hasAttribute('onerror')) {
+      node.removeAttribute('onload');
+      node.removeAttribute('onerror');
+    }
+  }
+});
+
+// Then clean the SVG
+const cleanSvg = DOMPurify.sanitize(svgInput, {
+  USE_PROFILES: { svg: true, svgFilters: true }
+});
+container.innerHTML = cleanSvg;
+
+// Option 2: Create a dedicated SVG viewer that restricts execution
+function safeSvgViewer(svgString, container) {
+  // Create a sandboxed iframe
+  const frame = document.createElement('iframe');
+  frame.sandbox = 'allow-same-origin';
+  frame.style.border = 'none';
+  frame.style.width = '100%';
+  frame.style.height = '100%';
+  container.appendChild(frame);
+  
+  // Write the SVG to the iframe without scripts
+  const cleanSvg = DOMPurify.sanitize(svgString, {
+    USE_PROFILES: { svg: true },
+    FORBID_TAGS: ['script']
+  });
+  
+  frame.contentDocument.open();
+  frame.contentDocument.write(cleanSvg);
+  frame.contentDocument.close();
+}`
+  },
+  // URL schemes in JavaScript
+  {
+    type: "javaScriptUrlScheme",
+    regex: /(?:location|window\.location|document\.location|window\.open|location\.href|location\.replace)\s*(?:=|\()[\'"]\s*javascript:/ig,
+    severity: "critical" as const,
+    title: "JavaScript URL Scheme Used",
+    description: "Using the javascript: URL scheme allows direct code execution and is a common XSS vector.",
+    recommendation: "Never use javascript: URLs, especially with user input. Validate all URLs to ensure they use safe schemes like https:.",
+    recommendationCode: `// Instead of javascript: URLs for actions
+// NEVER do this:
+// link.href = "javascript:executeFunction('" + userInput + "')";
+// window.location = "javascript:alert('message')";
+
+// Use event handlers and validate URLs:
+function isValidUrl(url) {
+  // Check for safe URL schema
+  return /^(https?:\/\/|\/|\.\/|\.\.\/)/i.test(url) && 
+         !/^javascript:/i.test(url) && 
+         !/^data:/i.test(url);
+}
+
+// For links:
+const button = document.getElementById('action-button');
+button.addEventListener('click', (e) => {
+  e.preventDefault();
+  // Execute your function directly
+  executeFunction(safeUserInput);
+});
+
+// For redirects:
+function safeRedirect(url) {
+  if (isValidUrl(url)) {
+    window.location = url;
+  } else {
+    console.error('Invalid URL detected:', url);
+  }
+}`
+  },
+  // CSS-based expressions (legacy but important to detect)
+  {
+    type: "cssExpressionXSS",
+    regex: /style\s*=\s*['"]\s*.*?expression\s*\(|\.style\.cssText\s*=\s*['"].*?expression\s*\(/ig,
+    severity: "medium" as const,
+    title: "CSS Expression Usage",
+    description: "CSS expressions in older IE browsers can execute JavaScript code, creating a vector for XSS attacks.",
+    recommendation: "Never use CSS expressions. Use standard CSS properties instead and sanitize any CSS that may come from user input.",
+    recommendationCode: `// Instead of CSS expressions
+// NEVER do this:
+// element.style.cssText = "width: expression(alert('XSS'))";
+// <div style="width: expression(alert('XSS'))"></div>
+
+// Use standard CSS:
+element.style.width = safeValue + 'px';
+
+// If you need dynamic values, use JavaScript:
+function updateElementWidth(element, value) {
+  // Validate the value is a number
+  const width = parseFloat(value);
+  if (!isNaN(width) && width > 0) {
+    element.style.width = width + 'px';
+  }
+}
+
+// If you need to set complex CSS from user input:
+import DOMPurify from 'dompurify';
+
+function setElementStyle(element, css) {
+  // Use DOMPurify to clean CSS
+  const cleanProps = {};
+  const tempDiv = document.createElement('div');
+  tempDiv.style.cssText = DOMPurify.sanitize('x:y; ' + css);
+  
+  // Extract cleaned properties
+  const style = tempDiv.style;
+  for (let i = 0; i < style.length; i++) {
+    const prop = style[i];
+    cleanProps[prop] = style[prop];
+  }
+  
+  // Apply cleaned properties
+  Object.assign(element.style, cleanProps);
+}`
+  },
+  // CSP bypass techniques
+  {
+    type: "cspBypass",
+    regex: /document\.getElementsByTagName\s*\(\s*['"]script['"].*?\.appendChild\s*\(|document\.write\s*\(\s*(['"`])<script\s*src/ig,
+    severity: "high" as const,
+    title: "Potential CSP Bypass",
+    description: "Dynamically adding script elements or using document.write with scripts may bypass CSP restrictions in some cases.",
+    recommendation: "Use proper ways to load scripts, preferably at initial page load time, and ensure your CSP policies are correctly configured.",
+    recommendationCode: `// Instead of dynamic script insertion:
+// document.write('<script src="' + source + '"></script>');
+
+// Proper script loading with checks:
+function loadScript(src, callback) {
+  // Validate the source URL
+  if (!src.match(/^https:\/\/trusted-domain\.com\//)) {
+    console.error('Untrusted script source');
+    return;
+  }
+  
+  // Create script element properly
+  const script = document.createElement('script');
+  script.async = true;
+  
+  // Add load event handler
+  if (callback) {
+    script.onload = callback;
+  }
+  
+  // Set source after other properties and listeners
+  script.src = src;
+  
+  // Append to document
+  document.head.appendChild(script);
+}
+
+// Even better, use modern approaches like ES modules
+import { feature } from './trusted-module.js';
+
+// Or dynamic imports when needed
+async function loadFeature() {
+  try {
+    const module = await import('./feature.js');
+    module.initialize();
+  } catch (err) {
+    console.error('Failed to load module:', err);
+  }
+}`
   }
 ];
