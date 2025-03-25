@@ -1581,7 +1581,7 @@ export default {
   // Advanced JavaScript context XSS
   {
     type: "postMessageXSS",
-    regex: /window\.addEventListener\s*\(\s*["']message["']\s*,\s*(?:function\s*\([^)]*\)|[^,]*)\s*\{[^}]*innerHTML/gs,
+    regex: /window\.addEventListener\s*\(\s*["']message["']\s*,\s*(?:function\s*\([^)]*\)|[^,]*)\s*\{[^}]*innerHTML/g,
     severity: "high" as const,
     title: "Insecure postMessage Handler",
     description: "Using innerHTML with data received from postMessage without proper origin checking and content validation can lead to XSS.",
@@ -1694,7 +1694,7 @@ const safeElement = document.getElementById('app-forms');
   // Local storage based XSS
   {
     type: "localStorageXSS",
-    regex: /localStorage\.getItem\s*\([^)]*\)(?:(?!\.replace|!=|!==|===|==|[!=]=\s*null).)*(?:innerHTML|outerHTML|document\.write)/gs,
+    regex: /localStorage\.getItem\s*\([^)]*\)[^;]*(?:innerHTML|outerHTML|document\.write)/g,
     severity: "high" as const,
     title: "Unsafe localStorage Data Usage",
     description: "Using localStorage data without sanitization in HTML contexts can lead to stored XSS vulnerabilities.",
@@ -1717,7 +1717,7 @@ if (userData) {
   // Client-side template injection
   {
     type: "templateInjection",
-    regex: /new\s+(?:Function|Function\s*\()\s*\(\s*(['"`]).*?\$\{.*?\1\s*\)/gs,
+    regex: /new\s+(?:Function|Function\s*\()\s*\(\s*(['"`])[^'"]*\$\{[^'"]*\1\s*\)/g,
     severity: "critical" as const,
     title: "Client-side Template Injection",
     description: "Creating functions with template literals that incorporate user input can lead to code execution vulnerabilities.",
