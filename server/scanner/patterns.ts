@@ -2341,7 +2341,7 @@ observer.observe(secureContainer, {
   // Meta tag injection
   {
     type: "metaTagInjection",
-    regex: /createElement\s*\(\s*['"]meta['"](?:(?!content).)*\.setAttribute\s*\(\s*['"]content['"]/g,
+    regex: /createElement\s*\(\s*['"]meta['"].*?\.(content|setAttribute)\s*\(\s*['"]content['"]\s*,\s*(?!['"]\s*\+\s*(?:sanitize|validate|escape|check|filter))/g,
     severity: "medium" as const,
     title: "Potential Meta Tag Injection",
     description: "Dynamically creating meta tags with user-controlled content can lead to client-side redirects or influence browser behavior.",
@@ -2652,5 +2652,317 @@ async function generateEncryptionKey() {
 // Usage:
 const secureToken = generateSecureToken();
 document.getElementById('csrf-token').value = secureToken;`
+  },
+  // Reflected data injection
+  {
+    type: "reflectedDataInjection",
+    regex: /(?:document\.write|\.innerHTML|\.outerHTML)\s*\(\s*(?:.*?(?:location|window\.location|document\.URL|document\.documentURI|document\.referrer|document\.location)\.(?:hash|search|href|pathname)|.*?(?:URLSearchParams|url\.searchParams)\.get)/g,
+    severity: "high" as const,
+    title: "Reflected Data Injection",
+    description: "Directly writing URL parameters to the DOM without sanitization enables reflected XSS attacks.",
+    recommendation: "Always sanitize URL parameters before inserting them into the DOM. Use textContent for text nodes or a proper sanitization library for HTML.",
+    recommendationCode: `// UNSAFE patterns:
+// document.write(location.search.substring(1)); // Directly writing query params
+// element.innerHTML = new URLSearchParams(location.search).get('message');
+
+// SAFER approaches:
+// Option 1: Use textContent for safe text display
+const params = new URLSearchParams(window.location.search);
+const message = params.get('message');
+if (message) {
+  document.getElementById('message-container').textContent = message;
+}
+
+// Option 2: For HTML content, use proper sanitization
+import DOMPurify from 'dompurify';
+
+const params = new URLSearchParams(window.location.search);
+const htmlContent = params.get('content');
+if (htmlContent) {
+  // Sanitize the HTML before insertion
+  const sanitizedHtml = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'ul', 'ol', 'li'],
+    ALLOWED_ATTR: ['href', 'target']
+  });
+  document.getElementById('content-container').innerHTML = sanitizedHtml;
+}`
+  },
+  // Dangerous innerHTML usage with variables
+  {
+    type: "dangerousInnerHTMLWithVariable",
+    regex: /(?:\.innerHTML|\.outerHTML)\s*=\s*(?!['"`]\s*(?:<div|<span|<p|<h1|<a|<ul|<button|<img)[^+]*['"`]\s*\+)/g,
+    severity: "high" as const,
+    title: "Potentially Dangerous innerHTML Assignment",
+    description: "Setting innerHTML/outerHTML with variables or concatenated strings can lead to XSS vulnerabilities if the input isn't properly sanitized.",
+    recommendation: "Use textContent for text or sanitize HTML content before setting innerHTML. Consider using DOM methods like createElement for more complex structures.",
+    recommendationCode: `// UNSAFE patterns:
+// element.innerHTML = userProvidedData;
+// element.innerHTML = "<div>" + message + "</div>";
+
+// SAFER approaches:
+// Option 1: For text content
+element.textContent = userProvidedData;
+
+// Option 2: For simple HTML structures, use DOM methods
+function safelyCreateElement(message) {
+  const div = document.createElement('div');
+  div.className = 'message';
+  
+  const strong = document.createElement('strong');
+  strong.textContent = 'Message: ';
+  
+  const span = document.createElement('span');
+  span.textContent = message; // Safely set as text
+  
+  div.appendChild(strong);
+  div.appendChild(span);
+  
+  return div;
+}
+
+// Usage:
+const messageElement = safelyCreateElement(userMessage);
+container.appendChild(messageElement);
+
+// Option 3: When you need to insert HTML, use sanitization
+import DOMPurify from 'dompurify';
+
+function setHTML(element, htmlContent) {
+  // Configure DOMPurify
+  const sanitizedHTML = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'span', 'p', 'a', 'ul', 'ol', 'li'],
+    ALLOWED_ATTR: ['href', 'class', 'id', 'target']
+  });
+  
+  // Now safe to use innerHTML
+  element.innerHTML = sanitizedHTML;
+}`
+  },
+  // Insecure DOMParser usage
+  {
+    type: "insecureDOMParser",
+    regex: /(?:new\s+DOMParser\s*\(\s*\)\.parseFromString|\.parseFromString)\s*\(\s*(?!['"]\s*<)/g,
+    severity: "medium" as const,
+    title: "Insecure DOMParser Usage",
+    description: "Using DOMParser with unsanitized input can introduce XSS vulnerabilities when the parsed content is added to the live DOM.",
+    recommendation: "Sanitize input before parsing it with DOMParser, especially when extracting elements to add to the live DOM.",
+    recommendationCode: `// UNSAFE pattern:
+// const parser = new DOMParser();
+// const doc = parser.parseFromString(userProvidedHTML, 'text/html');
+// document.body.appendChild(doc.body.firstChild);
+
+// SAFER approach:
+import DOMPurify from 'dompurify';
+
+function safelyParseAndUseHTML(html) {
+  // First sanitize the HTML
+  const sanitizedHTML = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['div', 'span', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'a'],
+    ALLOWED_ATTR: ['href', 'class', 'id', 'style']
+  });
+  
+  // Then parse it
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(sanitizedHTML, 'text/html');
+  
+  // Now it's safer to use in the live DOM
+  return doc.body.firstChild;
+}
+
+// Usage:
+const parsedElement = safelyParseAndUseHTML(userHTML);
+if (parsedElement) {
+  document.getElementById('container').appendChild(parsedElement);
+}`
+  },
+  // DOM Clobbering via ID attribute
+  {
+    type: "domClobberingViaID",
+    regex: /\.getElementById\s*\(\s*(?!['"](?:[a-zA-Z0-9_-]+)['"]\s*\))/g,
+    severity: "medium" as const,
+    title: "Potential DOM Clobbering Vulnerability",
+    description: "Using getElementById with variable inputs can be exploited via DOM clobbering attacks, where attackers inject elements with controlled IDs.",
+    recommendation: "Use constant, hardcoded IDs with getElementById or validate ID inputs against a strict allowlist.",
+    recommendationCode: `// UNSAFE patterns:
+// const element = document.getElementById(userProvidedId);
+// document.getElementById(params.get('section')).innerHTML = content;
+
+// SAFER approaches:
+// Option 1: Use hardcoded IDs (preferred)
+const element = document.getElementById('user-profile');
+
+// Option 2: If dynamic IDs are needed, validate against an allowlist
+function getElementByValidatedId(id) {
+  // Define allowed IDs
+  const allowedIds = ['profile', 'settings', 'dashboard', 'messages'];
+  
+  // Validate the ID
+  if (typeof id !== 'string' || !allowedIds.includes(id)) {
+    console.error('Invalid or disallowed element ID:', id);
+    return null;
+  }
+  
+  return document.getElementById(id);
+}
+
+// Usage:
+const section = getElementByValidatedId(sectionId);
+if (section) {
+  section.textContent = data;
+}`
+  },
+  // JSON.parse vulnerability
+  {
+    type: "unsafeJSONParse",
+    regex: /JSON\.parse\s*\(\s*(?!['"]|\{|\[)[^;,)]*/g,
+    severity: "medium" as const,
+    title: "Potentially Unsafe JSON.parse Usage",
+    description: "Using JSON.parse with unsanitized user-controlled data can lead to prototype pollution and other injection vulnerabilities.",
+    recommendation: "Validate JSON input before parsing and use JSON schema validation for complex structures.",
+    recommendationCode: `// UNSAFE patterns:
+// const data = JSON.parse(userInput);
+// const config = JSON.parse(localStorage.getItem('config'));
+
+// SAFER approaches:
+// Option 1: Add validation and error handling
+function safeJsonParse(jsonString, defaultValue = {}) {
+  try {
+    if (typeof jsonString !== 'string') {
+      return defaultValue;
+    }
+    
+    // Optional: simple validation for very basic JSON format
+    if (!jsonString.match(/^\\s*({|\\[)/)) {
+      console.error('Invalid JSON format detected');
+      return defaultValue;
+    }
+    
+    const result = JSON.parse(jsonString);
+    
+    // Simple prototype pollution protection
+    if (result && typeof result === 'object' && result.__proto__) {
+      delete result.__proto__;
+    }
+    
+    return result;
+  } catch (e) {
+    console.error('JSON parsing failed:', e);
+    return defaultValue;
+  }
+}
+
+// Option 2: Using JSON schema validation for more control
+// npm install ajv
+import Ajv from 'ajv';
+
+function validateJsonWithSchema(json, schema) {
+  const ajv = new Ajv();
+  const validate = ajv.compile(schema);
+  
+  let data;
+  try {
+    data = (typeof json === 'string') ? JSON.parse(json) : json;
+  } catch (e) {
+    console.error('Invalid JSON:', e);
+    return null;
+  }
+  
+  const valid = validate(data);
+  if (!valid) {
+    console.error('Schema validation failed:', validate.errors);
+    return null;
+  }
+  
+  return data;
+}
+
+// Usage example:
+const userSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number' },
+    name: { type: 'string' },
+    email: { type: 'string', format: 'email' }
+  },
+  required: ['id', 'name', 'email'],
+  additionalProperties: false // Prevents extra properties
+};
+
+const userData = validateJsonWithSchema(userInputJSON, userSchema);
+if (userData) {
+  // Safe to use the data
+  processUser(userData);
+}`
+  },
+  // XSS in template literals
+  {
+    type: "xssInTemplateLiterals",
+    regex: /`(?:[^`]*\$\{[^}]*(?:user|input|params|query|search|config|data|form)[^}]*\}[^`]*)+`(?=\s*[\.,;]?\s*(?:innerHTML|outerHTML|document\.write|\.insertAdjacentHTML))/g,
+    severity: "high" as const,
+    title: "XSS in Template Literals",
+    description: "Using template literals with user-controlled data directly for HTML can lead to XSS vulnerabilities.",
+    recommendation: "Sanitize data before using it in template literals that generate HTML, or use textContent instead of innerHTML.",
+    recommendationCode: `// UNSAFE patterns:
+// element.innerHTML = \`<div>Hello, \${userName}!</div>\`;
+// container.innerHTML = \`
+//   <article>
+//     <h2>\${article.title}</h2>
+//     <div class="content">\${article.body}</div>
+//   </article>
+// \`;
+
+// SAFER approaches:
+// Option 1: Sanitize data in template literals
+import DOMPurify from 'dompurify';
+
+function safeTemplate(template, data) {
+  // Process template with sanitized values
+  const html = template.replace(/\\{\\{([^}]+)\\}\\}/g, (match, key) => {
+    const value = data[key.trim()];
+    return value ? DOMPurify.sanitize(value) : '';
+  });
+  
+  return html;
+}
+
+// Usage:
+const template = \`
+  <article>
+    <h2>{{title}}</h2>
+    <div class="content">{{body}}</div>
+  </article>
+\`;
+
+const html = safeTemplate(template, {
+  title: articleTitle,
+  body: articleBody
+});
+
+container.innerHTML = html;
+
+// Option 2: Build DOM safely instead of using innerHTML
+function renderArticle(article) {
+  const articleEl = document.createElement('article');
+  
+  const titleEl = document.createElement('h2');
+  titleEl.textContent = article.title;
+  
+  const contentEl = document.createElement('div');
+  contentEl.className = 'content';
+  contentEl.textContent = article.body;
+  
+  articleEl.appendChild(titleEl);
+  articleEl.appendChild(contentEl);
+  
+  return articleEl;
+}
+
+// Usage:
+const articleElement = renderArticle({
+  title: articleTitle,
+  body: articleBody
+});
+
+container.appendChild(articleElement);`
   }
 ];
