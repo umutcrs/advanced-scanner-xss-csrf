@@ -132,8 +132,8 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     low: countPatternMatches(sortedVulnerabilities, "low"),
     info: countPatternMatches(sortedVulnerabilities, "info"),
     total: sortedVulnerabilities.length,
-    uniqueTypes: new Set(sortedVulnerabilities.map(v => v.type)).size,
-    passedChecks: scanPatterns.length - new Set(sortedVulnerabilities.map(v => v.type)).size
+    uniqueTypes: new Set(sortedVulnerabilities.map((v: Vulnerability) => v.type)).size,
+    passedChecks: scanPatterns.length - new Set(sortedVulnerabilities.map((v: Vulnerability) => v.type)).size
   };
   
   return {

@@ -41,6 +41,8 @@ export const scanResultSchema = z.object({
     low: z.number(),
     info: z.number(),
     passedChecks: z.number(),
+    total: z.number().optional(),
+    uniqueTypes: z.number().optional()
   }),
   scannedAt: z.string(),
 });
