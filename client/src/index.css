@@ -11,3 +11,29 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@layer components {
+  .text-accent {
+    @apply text-blue-600;
+  }
+  
+  .bg-accent {
+    @apply bg-blue-600;
+  }
+  
+  .text-critical {
+    @apply text-red-600;
+  }
+  
+  .text-high {
+    @apply text-orange-600;
+  }
+  
+  .text-medium {
+    @apply text-yellow-600;
+  }
+  
+  .text-success {
+    @apply text-green-600;
+  }
+}
