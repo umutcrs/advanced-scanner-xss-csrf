@@ -105,9 +105,22 @@ export default function ResultsPanel({ results, isScanning }: ResultsPanelProps)
             <div className="p-4">
               <h4 className="text-base font-medium text-gray-900 mb-3">Vulnerability Details</h4>
               <div className="space-y-4">
-                {results.vulnerabilities.map((vulnerability) => (
-                  <VulnerabilityCard key={vulnerability.id} vulnerability={vulnerability} />
-                ))}
+                {/* Sort again by severity to ensure critical vulnerabilities are always at the top */}
+                {results.vulnerabilities
+                  .sort((a, b) => {
+                    const severityOrder: Record<string, number> = {
+                      'critical': 0,
+                      'high': 1,
+                      'medium': 2,
+                      'low': 3,
+                      'info': 4
+                    };
+                    return severityOrder[a.severity] - severityOrder[b.severity];
+                  })
+                  .map((vulnerability) => (
+                    <VulnerabilityCard key={vulnerability.id} vulnerability={vulnerability} />
+                  ))
+                }
               </div>
             </div>
           ) : (

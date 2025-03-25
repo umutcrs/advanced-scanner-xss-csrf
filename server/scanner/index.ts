@@ -121,7 +121,7 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     return vuln;
   });
   
-  // Sort vulnerabilities by severity for better presentation
+  // Sort vulnerabilities by severity for better presentation (critical first)
   const sortedVulnerabilities = sortVulnerabilitiesBySeverity(enrichedVulnerabilities);
   
   // Enhanced summary statistics
