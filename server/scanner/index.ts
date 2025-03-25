@@ -10,7 +10,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 // Confidence threshold - vulnerabilities with lower scores will be excluded
-const CONFIDENCE_THRESHOLD = 0.4;
+const CONFIDENCE_THRESHOLD = 0.35; // Lower threshold to catch more potential issues
 
 /**
  * Advanced scanning engine for detecting XSS vulnerabilities in JavaScript code
@@ -103,18 +103,41 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   // Deduplicate vulnerabilities that refer to the same code snippet
   const uniqueVulnerabilities = deduplicateVulnerabilities(finalVulnerabilities);
   
-  // Count vulnerabilities by severity for summary
+  // Enrich vulnerability data with additional context if needed
+  const enrichedVulnerabilities = uniqueVulnerabilities.map(vuln => {
+    // Format code snippets more nicely
+    vuln.code = formatCodeSnippet(vuln.code);
+    
+    // Add additional context to recommendations for specific vulnerability types
+    if (vuln.type === "eval" || vuln.type === "Function" || vuln.type === "setTimeout" || vuln.type === "setInterval") {
+      vuln.description += " This is one of the most serious XSS vulnerabilities as it allows direct code execution.";
+    }
+    
+    if (vuln.type.includes("HTML") || vuln.type.includes("html")) {
+      // Add link to OWASP for HTML-based XSS vulnerabilities
+      vuln.description += " See OWASP guidelines for handling HTML content safely.";
+    }
+    
+    return vuln;
+  });
+  
+  // Sort vulnerabilities by severity for better presentation
+  const sortedVulnerabilities = sortVulnerabilitiesBySeverity(enrichedVulnerabilities);
+  
+  // Enhanced summary statistics
   const summary = {
-    critical: countPatternMatches(uniqueVulnerabilities, "critical"),
-    high: countPatternMatches(uniqueVulnerabilities, "high"),
-    medium: countPatternMatches(uniqueVulnerabilities, "medium"),
-    low: countPatternMatches(uniqueVulnerabilities, "low"),
-    info: countPatternMatches(uniqueVulnerabilities, "info"),
-    passedChecks: scanPatterns.length - new Set(uniqueVulnerabilities.map(v => v.type)).size
+    critical: countPatternMatches(sortedVulnerabilities, "critical"),
+    high: countPatternMatches(sortedVulnerabilities, "high"),
+    medium: countPatternMatches(sortedVulnerabilities, "medium"),
+    low: countPatternMatches(sortedVulnerabilities, "low"),
+    info: countPatternMatches(sortedVulnerabilities, "info"),
+    total: sortedVulnerabilities.length,
+    uniqueTypes: new Set(sortedVulnerabilities.map(v => v.type)).size,
+    passedChecks: scanPatterns.length - new Set(sortedVulnerabilities.map(v => v.type)).size
   };
   
   return {
-    vulnerabilities: uniqueVulnerabilities,
+    vulnerabilities: sortedVulnerabilities,
     summary,
     scannedAt: new Date().toISOString()
   };
@@ -130,11 +153,34 @@ function prepareCodeForScanning(code: string): string {
     return '';
   }
   
+  // Normalize input by removing Byte Order Mark (BOM) if present
+  let preparedCode = code.replace(/^\uFEFF/, '');
+  
   // Replace minified semicolons with newlines to improve pattern matching
-  let preparedCode = code.replace(/;(?=\S)/g, ';\n');
+  preparedCode = preparedCode.replace(/;(?=\S)/g, ';\n');
+  
+  // Add spaces around operators for better pattern matching
+  preparedCode = preparedCode
+    .replace(/([+\-*/%&|^<>=!])([\w$.])/g, '$1 $2')  // Add space after operator
+    .replace(/([\w$.])([+\-*/%&|^<>=!])/g, '$1 $2'); // Add space before operator
   
   // Handle CR/CRLF line endings
   preparedCode = preparedCode.replace(/\r\n?/g, '\n');
+  
+  // Break up complex statements on same line
+  preparedCode = preparedCode.replace(/([;{}])\s*([^\s;{}])/g, '$1\n$2');
+  
+  // Clean up extra whitespace without changing actual content
+  preparedCode = preparedCode
+    .replace(/[ \t]+/g, ' ')         // Multiple spaces/tabs to single space
+    .replace(/\n[ \t]+/g, '\n')      // Leading whitespace
+    .replace(/[ \t]+\n/g, '\n');     // Trailing whitespace
+    
+  // Ensure function blocks are nicely formatted
+  preparedCode = preparedCode.replace(/\)\s*{/g, ') {');
+  
+  // Make sure pattern matching has enough whitespace to work with
+  preparedCode = preparedCode.replace(/([a-zA-Z0-9_$])\(/g, '$1 (');
   
   return preparedCode;
 }
@@ -175,4 +221,31 @@ function deduplicateVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerabi
   }
   
   return uniqueVulnerabilities;
+}
+
+/**
+ * Sorts vulnerabilities by severity and line number for better presentation 
+ * @param vulnerabilities Array of vulnerabilities to sort
+ * @returns Sorted vulnerabilities array
+ */
+function sortVulnerabilitiesBySeverity(vulnerabilities: Vulnerability[]): Vulnerability[] {
+  const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  
+  return [...vulnerabilities].sort((a, b) => {
+    // First, sort by severity
+    const aSeverity = severityOrder[a.severity as keyof typeof severityOrder] || 5;
+    const bSeverity = severityOrder[b.severity as keyof typeof severityOrder] || 5;
+    
+    if (aSeverity !== bSeverity) {
+      return aSeverity - bSeverity;
+    }
+    
+    // Then sort by line number if available
+    if (a.line && b.line && a.line !== b.line) {
+      return a.line - b.line;
+    }
+    
+    // Finally sort by vulnerability type
+    return a.type.localeCompare(b.type);
+  });
 }

@@ -3,7 +3,7 @@
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns = [
-  // DOM-based XSS vulnerabilities
+  // DOM-based XSS vulnerabilities - Critical risk
   {
     type: "innerHTML",
     regex: /\.innerHTML\s*=\s*([^;]*)/g,
@@ -31,7 +31,7 @@ element.parentNode.replaceChild(newElement, element);`
   },
   {
     type: "insertAdjacentHTML",
-    regex: /\.insertAdjacentHTML\s*\(/g,
+    regex: /\.insertAdjacentHTML\s*\(\s*(['"`][^'"`]*['"`])\s*,\s*([^)]*)\)/g,
     severity: "high" as const,
     title: "insertAdjacentHTML Injection",
     description: "insertAdjacentHTML can execute script content if used with unvalidated input.",
@@ -44,7 +44,7 @@ element.insertAdjacentHTML('beforeend', DOMPurify.sanitize(userInput));`
   },
   {
     type: "documentWrite",
-    regex: /document\.write\s*\(/g,
+    regex: /document\.write\s*\((?!\s*['"`]<!DOCTYPE)([^)]*)\)/g,
     severity: "high" as const,
     title: "Unsafe document.write() Usage",
     description: "Using document.write() with user input can lead to XSS vulnerabilities as it directly writes to the document.",
@@ -56,7 +56,7 @@ document.body.appendChild(element);`
   },
   {
     type: "documentWriteLn",
-    regex: /document\.writeln\s*\(/g,
+    regex: /document\.writeln\s*\((?!\s*['"`]<!DOCTYPE)([^)]*)\)/g,
     severity: "high" as const,
     title: "Unsafe document.writeln() Usage",
     description: "Similar to document.write(), document.writeln() can lead to XSS vulnerabilities when used with user input.",
@@ -66,11 +66,31 @@ const element = document.createElement('div');
 element.textContent = userInput + '\\n';
 document.body.appendChild(element);`
   },
+  {
+    type: "dangerouslySetInnerHTML",
+    regex: /dangerouslySetInnerHTML\s*:\s*\{\s*__html\s*:\s*([^}]*)\}/g,
+    severity: "critical" as const,
+    title: "React dangerouslySetInnerHTML Misuse",
+    description: "Using dangerouslySetInnerHTML in React with unvalidated input can lead to XSS vulnerabilities.",
+    recommendation: "Sanitize HTML input before using dangerouslySetInnerHTML, or preferably avoid using it.",
+    recommendationCode: `// Instead of:
+<div dangerouslySetInnerHTML={{ __html: userProvidedHTML }} />
 
-  // Code evaluation vulnerabilities
+// Sanitize the input first:
+import DOMPurify from 'dompurify';
+
+<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userProvidedHTML) }} />
+
+// Or better yet, avoid innerHTML and use React's component model:
+function UserContent({ content }) {
+  return <div>{content}</div>;
+}`
+  },
+
+  // Code evaluation vulnerabilities - Critical risk
   {
     type: "eval",
-    regex: /eval\s*\(/g,
+    regex: /eval\s*\(([^)]*)\)/g,
     severity: "critical" as const,
     title: "Unsafe eval() Usage",
     description: "The use of eval() with user input creates a severe XSS vulnerability that allows arbitrary code execution.",
@@ -92,7 +112,7 @@ function calculateExpression() {
   },
   {
     type: "functionConstructor",
-    regex: /new\s+Function\s*\(/g,
+    regex: /new\s+Function\s*\(([^)]*)\)/g,
     severity: "critical" as const,
     title: "Function Constructor Misuse",
     description: "The Function constructor is similar to eval() and can execute arbitrary code if given user input.",
@@ -120,7 +140,7 @@ const result = operation(value);`
   },
   {
     type: "setTimeout",
-    regex: /setTimeout\s*\(\s*['"`]([^'"`]*)['"`]/g,
+    regex: /setTimeout\s*\(\s*(['"`][^'"`]*['"`])/g,
     severity: "high" as const,
     title: "Unsafe setTimeout String Evaluation",
     description: "Using setTimeout with a string argument acts like eval() and can execute injected code.",
@@ -135,7 +155,7 @@ setTimeout(() => {
   },
   {
     type: "setInterval",
-    regex: /setInterval\s*\(\s*['"`]([^'"`]*)['"`]/g,
+    regex: /setInterval\s*\(\s*(['"`][^'"`]*['"`])/g,
     severity: "high" as const,
     title: "Unsafe setInterval String Evaluation",
     description: "Using setInterval with a string argument acts like eval() and can execute injected code.",
@@ -148,11 +168,55 @@ setInterval(() => {
   updateData(userInput);
 }, 5000);`
   },
+  {
+    type: "indirectEval",
+    regex: /\(\s*eval\s*\)\s*\(/g,
+    severity: "critical" as const,
+    title: "Indirect eval() Usage",
+    description: "Using eval indirectly (e.g., (eval)()) can bypass some CSP restrictions and still execute arbitrary code.",
+    recommendation: "Never use eval in any form. Refactor code to avoid dynamic code execution.",
+    recommendationCode: `// Instead of indirect eval:
+// (eval)('alert(document.cookie)');
+
+// Use a more explicit and secure approach:
+function processCommand(command, allowedCommands) {
+  if (allowedCommands.includes(command)) {
+    // Execute pre-defined functions associated with commands
+    return commandHandlers[command]();
+  }
+  return null;
+}`
+  },
+  {
+    type: "jsGlobalWithEval",
+    regex: /(?:window|self|top|global)\s*\[\s*(['"`]eval['"`]|['"`]Function['"`])\s*\]/g,
+    severity: "critical" as const,
+    title: "Dynamic Access to eval/Function",
+    description: "Accessing eval or Function constructor dynamically through bracket notation can be used to bypass security scanners.",
+    recommendation: "Avoid accessing eval or Function constructor in any way, including through bracket notation.",
+    recommendationCode: `// Don't do this:
+// const evil = window['eval'];
+// evil('alert(document.cookie)');
+
+// Instead, use a safer approach to handle dynamic operations:
+function executeOperation(opName, ...args) {
+  const safeOperations = {
+    'add': (a, b) => a + b,
+    'multiply': (a, b) => a * b,
+    // other safe operations
+  };
+  
+  if (safeOperations.hasOwnProperty(opName)) {
+    return safeOperations[opName](...args);
+  }
+  throw new Error('Operation not allowed');
+}`
+  },
 
   // URL-based vulnerabilities
   {
     type: "setAttribute",
-    regex: /\.setAttribute\s*\(\s*['"](?:href|src|action|formaction|data|href|xlink:href)['"]\s*,\s*([^)]*)\)/g,
+    regex: /\.setAttribute\s*\(\s*(['"])(?:href|src|action|formaction|data|href|xlink:href|poster|background|ping)\1\s*,\s*([^)]*)\)/g,
     severity: "high" as const,
     title: "Unsafe setAttribute Usage on Sensitive Attributes",
     description: "Unvalidated user input in URL attributes could allow javascript: protocol exploits and other URL-based attacks.",
@@ -176,6 +240,36 @@ setInterval(() => {
   element.setAttribute('href', url);
   element.textContent = 'Click me'; // Use textContent, not innerHTML
   document.body.appendChild(element);
+}`
+  },
+  {
+    type: "setAttributeEvent",
+    regex: /\.setAttribute\s*\(\s*(['"])(?:on\w+)\1\s*,\s*([^)]*)\)/g,
+    severity: "critical" as const,
+    title: "Event Handler Injection via setAttribute",
+    description: "Setting event handlers (onclick, onload, etc.) via setAttribute with unvalidated input allows direct code execution.",
+    recommendation: "Never set event handlers using setAttribute. Use addEventListener instead and pass function references, not strings.",
+    recommendationCode: `// Instead of:
+element.setAttribute('onclick', userInput);
+
+// Use addEventListener with a function:
+element.addEventListener('click', (event) => {
+  // Safe handling of user action
+  console.log('Element clicked');
+  // Use userInput in a safe context
+  displayMessage(sanitizeInput(userInput));
+});
+
+// For dynamic functions, use a whitelist approach:
+const allowedActions = {
+  'showAlert': () => { alert('Safe alert'); },
+  'toggleVisibility': () => { element.classList.toggle('hidden'); }
+};
+
+// Then use it safely:
+const actionName = userInput;
+if (allowedActions.hasOwnProperty(actionName)) {
+  element.addEventListener('click', allowedActions[actionName]);
 }`
   },
   {
@@ -204,7 +298,30 @@ setInterval(() => {
   },
   {
     type: "locationHref",
-    regex: /(?:location\.href|location\.search|location\.hash|location\.pathname)\s*=\s*([^;]*)/g,
+    regex: /(?:location\.href|location\.replace|location\.assign)\s*\(\s*([^)]*)\)/g,
+    severity: "medium" as const,
+    title: "Unsafe Location Method Usage",
+    description: "Using location.href, location.replace, or location.assign with user input can lead to javascript: URL exploits.",
+    recommendation: "Validate URLs before using location methods to navigate.",
+    recommendationCode: `function navigateTo(url) {
+  // Validate the URL
+  if (!/^(https?:\/\/|\/|\.\/|\.\.\/)/i.test(url)) {
+    console.error("Invalid URL format");
+    return;
+  }
+  
+  if (/^javascript:|^data:|^vbscript:|^file:/i.test(url)) {
+    console.error("Potentially malicious URL protocol detected");
+    return;
+  }
+  
+  // Now we can safely navigate
+  location.href = url;
+}`
+  },
+  {
+    type: "locationPropertyAssignment",
+    regex: /(?:location\.search|location\.hash|location\.pathname|location\.host|location\.hostname)\s*=\s*([^;]*)/g,
     severity: "medium" as const,
     title: "Unsafe Location Property Assignment",
     description: "Setting location properties from user input can lead to javascript: URL exploits and other injection attacks.",
@@ -274,6 +391,73 @@ setInterval(() => {
   document.head.appendChild(script);
 }`
   },
+  {
+    type: "objectData",
+    regex: /\.data\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
+    severity: "medium" as const,
+    title: "Unsafe Object Data Property Assignment",
+    description: "Setting the data property of <object> elements can lead to loading malicious content or scripts.",
+    recommendation: "Validate the data URL and only allow trusted sources and safe file types.",
+    recommendationCode: `function setObjectData(objectElement, dataUrl) {
+  // Whitelist of allowed file extensions
+  const allowedExtensions = ['.pdf', '.svg', '.png', '.jpg', '.jpeg', '.gif'];
+  
+  // Check if URL has an allowed extension
+  const hasAllowedExtension = allowedExtensions.some(ext => 
+    dataUrl.toLowerCase().endsWith(ext));
+  
+  if (!hasAllowedExtension) {
+    console.error("Object data URL has disallowed file extension");
+    return;
+  }
+  
+  // Validate URL format
+  if (!/^(https?:\/\/|\/|\.\/|\.\.\/)/i.test(dataUrl) || 
+      /^javascript:|^data:|^vbscript:|^file:/i.test(dataUrl)) {
+    console.error("Invalid or potentially malicious data URL");
+    return;
+  }
+  
+  objectElement.data = dataUrl;
+}`
+  },
+  {
+    type: "iframeSrc",
+    regex: /(?:\.src\s*=\s*|\ssrc\s*=\s*['"])[^'"]*(?:['"])?(?=.*<\s*iframe)/g,
+    severity: "high" as const,
+    title: "Unsafe iframe Source",
+    description: "Setting iframe src with unvalidated input can lead to loading malicious content or same-origin policy bypass.",
+    recommendation: "Validate iframe sources and consider using the sandbox attribute.",
+    recommendationCode: `function setIframeSrc(iframe, src) {
+  // Whitelist of trusted domains for iframes
+  const trustedDomains = [
+    'trusted-site.com',
+    'safe-embed.com'
+  ];
+  
+  // Validate URL
+  try {
+    const url = new URL(src, window.location.origin);
+    
+    // Check if hostname is in trusted domains
+    const isTrusted = trustedDomains.some(domain => 
+      url.hostname === domain || url.hostname.endsWith('.' + domain));
+      
+    if (!isTrusted) {
+      console.error("Untrusted iframe source domain");
+      return;
+    }
+    
+    // Apply sandbox attribute for additional security
+    iframe.sandbox = 'allow-scripts allow-same-origin';
+    iframe.src = src;
+    
+  } catch (e) {
+    console.error("Invalid URL format");
+    return;
+  }
+}`
+  },
 
   // Dynamic HTML Generation
   {
@@ -313,6 +497,50 @@ div.className = 'user';
 div.textContent = userData.name;
 element.appendChild(div);`
   },
+  {
+    type: "unsafeJQueryHtml",
+    regex: /\$\([^)]*\)\.(?:html|append|prepend|after|before|replaceWith)\s*\(\s*([^)]*)\)/g,
+    severity: "high" as const,
+    title: "Unsafe jQuery HTML Manipulation",
+    description: "Using jQuery's HTML manipulation methods with unvalidated input can lead to XSS vulnerabilities.",
+    recommendation: "Sanitize input before using jQuery HTML methods or use text() instead of html().",
+    recommendationCode: `// Instead of:
+$('#element').html(userInput);
+
+// Use text() for plain text:
+$('#element').text(userInput);
+
+// Or sanitize first:
+$('#element').html(DOMPurify.sanitize(userInput));
+
+// For more complex DOM manipulation, create elements safely:
+const $div = $('<div>').addClass('user-content');
+$div.text(userInput);
+$('#container').append($div);`
+  },
+  {
+    type: "documentCreateElement",
+    regex: /document\.createElement\s*\(\s*(?:(?:variable\s*=\s*)|(?:[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*))?([^)]*)\)/g,
+    severity: "medium" as const,
+    title: "Dynamic Element Creation",
+    description: "Creating HTML elements with dynamic tag names from user input can lead to unexpected elements or XSS.",
+    recommendation: "Never use user input to determine element tag names.",
+    recommendationCode: `// Instead of:
+// const tagName = userInput; // DANGEROUS
+// const element = document.createElement(tagName);
+
+// Use a whitelist approach:
+function createSafeElement(tagName) {
+  const allowedTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li'];
+  
+  if (!allowedTags.includes(tagName.toLowerCase())) {
+    console.error('Attempted to create disallowed element type:', tagName);
+    return document.createElement('span'); // fallback to safe element
+  }
+  
+  return document.createElement(tagName);
+}`
+  },
 
   // Advanced injection techniques
   {
@@ -344,6 +572,33 @@ element.appendChild(div);`
 }`
   },
   {
+    type: "scriptTextContent",
+    regex: /\.(?:textContent|innerText|text)\s*=\s*([^;]*)(?=\s*;?\s*document\.(?:body|head)\.appendChild\s*\(\s*script\s*\))/g,
+    severity: "critical" as const,
+    title: "Dynamic Script Content Injection",
+    description: "Setting the content of a script element with user input before appending it to the document allows arbitrary code execution.",
+    recommendation: "Never set script content from user input. Use a predefined set of scripts or functions.",
+    recommendationCode: `// NEVER do this:
+// const script = document.createElement('script');
+// script.textContent = userInput;
+// document.head.appendChild(script);
+
+// Instead, use a safer approach:
+function executeAllowedOperation(operationName, ...args) {
+  const operations = {
+    'showUserProfile': (userId) => fetchAndDisplayUserProfile(userId),
+    'loadDashboard': () => navigateToDashboard(),
+    // other predefined operations
+  };
+  
+  if (operations.hasOwnProperty(operationName)) {
+    operations[operationName](...args);
+  } else {
+    console.error('Operation not allowed');
+  }
+}`
+  },
+  {
     type: "postMessageOrigin",
     regex: /addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)\s*\{(?:[^{}]|(?:\{[^{}]*\}))*\}|[^,)]+)(?!\s*,[^,]+\.origin)/g,
     severity: "medium" as const,
@@ -371,7 +626,7 @@ window.addEventListener('message', function(event) {
   },
   {
     type: "jsonParse",
-    regex: /JSON\.parse\s*\([^)]*\)/g,
+    regex: /JSON\.parse\s*\(([^)]*)\)/g,
     severity: "medium" as const,
     title: "Potential JSON Injection",
     description: "Using JSON.parse on unsanitized input can lead to prototype pollution or other injection attacks.",
@@ -397,30 +652,8 @@ function safeJSONParse(data) {
 }`
   },
   {
-    type: "dangerouslySetInnerHTML",
-    regex: /dangerouslySetInnerHTML\s*:\s*\{\s*__html\s*:\s*([^}]*)\}/g,
-    severity: "critical" as const,
-    title: "React dangerouslySetInnerHTML Misuse",
-    description: "Using dangerouslySetInnerHTML in React with unvalidated input can lead to XSS vulnerabilities.",
-    recommendation: "Sanitize HTML input before using dangerouslySetInnerHTML, or preferably avoid using it.",
-    recommendationCode: `// Instead of:
-<div dangerouslySetInnerHTML={{ __html: userProvidedHTML }} />
-
-// Sanitize the input first:
-import DOMPurify from 'dompurify';
-
-<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userProvidedHTML) }} />
-
-// Or better yet, avoid innerHTML and use React's component model:
-function UserContent({ content }) {
-  // Parse the content and render it as React components
-  // This depends on what exactly you're trying to achieve
-  return <div>{content}</div>;
-}`
-  },
-  {
     type: "domParser",
-    regex: /(?:new\s+DOMParser\(\)\.parseFromString|createContextualFragment)\s*\(/g,
+    regex: /(?:new\s+DOMParser\(\)\.parseFromString|createContextualFragment)\s*\(([^,)]*)/g,
     severity: "medium" as const,
     title: "Unsafe HTML Parsing",
     description: "Parsing HTML with DOMParser or createContextualFragment without sanitization can lead to XSS when the parsed content is inserted into the DOM.",
@@ -435,6 +668,38 @@ const parser = new DOMParser();
 const sanitizedInput = DOMPurify.sanitize(userInput);
 const doc = parser.parseFromString(sanitizedInput, 'text/html');
 container.appendChild(doc.body.firstChild);`
+  },
+  {
+    type: "parseFromString",
+    regex: /\.parseFromString\s*\(\s*([^,)]*)/g,
+    severity: "medium" as const,
+    title: "Unsafe parseFromString Usage",
+    description: "Using parseFromString with unvalidated input can lead to XSS vulnerabilities when the parsed content is added to the DOM.",
+    recommendation: "Sanitize input before parsing as XML or HTML.",
+    recommendationCode: `// Instead of:
+const parser = new DOMParser();
+const xmlDoc = parser.parseFromString(userInput, 'text/xml');
+
+// Sanitize first for HTML content:
+const safeInput = DOMPurify.sanitize(userInput);
+const safeDoc = parser.parseFromString(safeInput, 'text/html');
+
+// For XML, validate strictly:
+function parseXmlSafely(xmlString) {
+  try {
+    // Check for potentially malicious XML features
+    if (xmlString.includes('<!ENTITY') || 
+        xmlString.includes('<!DOCTYPE')) {
+      throw new Error('XML with potentially malicious features detected');
+    }
+    
+    const parser = new DOMParser();
+    return parser.parseFromString(xmlString, 'text/xml');
+  } catch (error) {
+    console.error('XML parsing error:', error);
+    return null;
+  }
+}`
   },
   {
     type: "innerText",
@@ -457,5 +722,225 @@ const exclamation = document.createTextNode('!');
 element.appendChild(greeting);
 element.appendChild(name);
 element.appendChild(exclamation);`
+  },
+  
+  // Framework-specific vulnerabilities
+  {
+    type: "angularBypassSecurityTrustHtml",
+    regex: /(?:bypassSecurityTrustHtml|bypassSecurityTrustScript|bypassSecurityTrustStyle|bypassSecurityTrustUrl|bypassSecurityTrustResourceUrl)\s*\(\s*([^)]*)\)/g,
+    severity: "critical" as const,
+    title: "Angular Security Bypass",
+    description: "Using Angular's bypassSecurity methods with user input disables Angular's built-in sanitization, creating XSS vulnerabilities.",
+    recommendation: "Never bypass Angular's security with untrusted input. Use Angular's sanitization methods instead.",
+    recommendationCode: `// Instead of:
+// this.sanitizedHtml = this.sanitizer.bypassSecurityTrustHtml(userInput);
+
+// Use Angular's DomSanitizer properly:
+import { DomSanitizer } from '@angular/platform-browser';
+
+// In your component:
+constructor(private sanitizer: DomSanitizer) {}
+
+// Then sanitize the input:
+this.sanitizedHtml = this.sanitizer.sanitize(SecurityContext.HTML, userInput);
+
+// Only bypass security for completely static, developer-controlled content:
+this.trustedStaticHtml = this.sanitizer.bypassSecurityTrustHtml('<b>Static HTML here</b>');`
+  },
+  {
+    type: "vueVBind",
+    regex: /v-html\s*=\s*["']([^"']*)["']/g,
+    severity: "high" as const,
+    title: "Unsafe Vue v-html Usage",
+    description: "Vue.js v-html directive renders content as HTML without sanitization, allowing XSS if user input is used.",
+    recommendation: "Avoid v-html with user input. Use v-text or mustache syntax ({{ }}) for displaying text.",
+    recommendationCode: `<!-- Instead of: -->
+<!-- <div v-html="userMessage"></div> -->
+
+<!-- Use v-text or mustache syntax: -->
+<div v-text="userMessage"></div>
+<!-- or -->
+<div>{{ userMessage }}</div>
+
+<!-- If you must use HTML, sanitize first: -->
+<!-- In your component: -->
+<script>
+import DOMPurify from 'dompurify';
+
+export default {
+  data() {
+    return {
+      userMessage: '<p>User input</p>'
+    }
+  },
+  computed: {
+    sanitizedMessage() {
+      return DOMPurify.sanitize(this.userMessage);
+    }
+  }
+}
+</script>
+
+<!-- Then in your template: -->
+<div v-html="sanitizedMessage"></div>`
+  },
+  
+  // DOM clobbering vulnerabilities
+  {
+    type: "documentGetElementById",
+    regex: /document\.getElementById\s*\(\s*(['"`][^'"`]*['"`])\s*\)/g,
+    severity: "low" as const,
+    title: "Potential DOM Clobbering Vulnerability",
+    description: "Using getElementById with a fixed string can be exploited through DOM clobbering if the ID is also used as an object property.",
+    recommendation: "Ensure IDs used with getElementById are not also used as object property names in your code.",
+    recommendationCode: `// Vulnerable pattern:
+// const config = {};
+// config.endpoint = document.getElementById('endpoint').value;
+// fetch(config.endpoint + '/data');
+
+// Safer approach:
+function getElementValueById(id) {
+  const element = document.getElementById(id);
+  // Validate element is of expected type
+  if (element && element instanceof HTMLInputElement) {
+    return element.value;
+  }
+  return null;
+}
+
+// Then use with validation:
+const endpoint = getElementValueById('endpoint');
+if (endpoint && isValidUrl(endpoint)) {
+  fetch(endpoint + '/data');
+}`
+  },
+  
+  // Advanced XSS through DOM manipulation
+  {
+    type: "documentCreateRange",
+    regex: /createContextualFragment\s*\(\s*([^)]*)\)/g,
+    severity: "high" as const,
+    title: "Unsafe Range.createContextualFragment Usage",
+    description: "Using createContextualFragment with user input can lead to XSS when the fragments are inserted into the DOM.",
+    recommendation: "Sanitize HTML before using createContextualFragment.",
+    recommendationCode: `// Instead of:
+const range = document.createRange();
+const fragment = range.createContextualFragment(userInput);
+document.body.appendChild(fragment);
+
+// Sanitize first:
+const sanitizedHtml = DOMPurify.sanitize(userInput);
+const range = document.createRange();
+const fragment = range.createContextualFragment(sanitizedHtml);
+document.body.appendChild(fragment);`
+  },
+  
+  // Advanced event-based XSS
+  {
+    type: "eventHandlerProperty",
+    regex: /\.(?:onclick|onmouseover|onload|onerror|onsubmit|onfocus|onblur|onkeyup|onkeydown|onchange|onunload)\s*=\s*([^;]*)/g,
+    severity: "high" as const,
+    title: "Event Handler Property Assignment",
+    description: "Setting event handler properties (onclick, onload, etc.) with user input allows direct code execution.",
+    recommendation: "Never set event handler properties using user input. Use addEventListener with function references.",
+    recommendationCode: `// Instead of:
+element.onclick = 'alert("' + userInput + '")';
+// or
+element.onclick = function() { processUserInput(userInput); };
+
+// Use addEventListener with a function:
+element.addEventListener('click', function(event) {
+  // Safely handle the input
+  displayMessage(sanitizeInput(userInput));
+});`
+  },
+  
+  // Meta-programming vulnerabilities
+  {
+    type: "objectDefineProperty",
+    regex: /Object\.defineProperty\s*\(\s*([^,]*),\s*([^,]*),\s*{/g,
+    severity: "medium" as const,
+    title: "Potential Prototype Pollution via defineProperty",
+    description: "Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.",
+    recommendation: "Validate object and property names before using defineProperty, especially with user input.",
+    recommendationCode: `// Instead of:
+// Object.defineProperty(target, userInput, { value: 'some value' });
+
+// Validate the property name first:
+function safeDefineProperty(obj, propName, descriptor) {
+  // Disallow prototype chain or constructor manipulation
+  if (propName === '__proto__' || 
+      propName === 'constructor' || 
+      propName === 'prototype') {
+    console.error('Attempted to define unsafe property:', propName);
+    return false;
+  }
+  
+  // Only allow whitelisted properties if using user input
+  const allowedProps = ['name', 'description', 'value', 'isActive'];
+  if (!allowedProps.includes(propName)) {
+    console.error('Property name not in allowed list:', propName);
+    return false;
+  }
+  
+  Object.defineProperty(obj, propName, descriptor);
+  return true;
+}`
+  },
+  
+  // HTML5-specific vulnerabilities
+  {
+    type: "srcdocAssignment",
+    regex: /\.srcdoc\s*=\s*([^;]*)/g,
+    severity: "critical" as const,
+    title: "iframe srcdoc Injection",
+    description: "Setting the srcdoc attribute of an iframe with user input allows direct HTML/JavaScript execution in the iframe context.",
+    recommendation: "Sanitize HTML content before setting iframe.srcdoc.",
+    recommendationCode: `// Instead of:
+iframe.srcdoc = userProvidedHTML;
+
+// Sanitize first:
+iframe.srcdoc = DOMPurify.sanitize(userProvidedHTML, {
+  SANITIZE_DOM: true,
+  FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick']
+});
+
+// Or better yet, use a safer alternative:
+iframe.srcdoc = '<html><body>' + 
+                '<div>' + escapeHtml(userMessage) + '</div>' +
+                '</body></html>';
+
+// Helper function to escape HTML
+function escapeHtml(html) {
+  const div = document.createElement('div');
+  div.textContent = html;
+  return div.innerHTML;
+}`
+  },
+  
+  // URL manipulation vulnerabilities
+  {
+    type: "urlSearchParamsAppend",
+    regex: /\.append\s*\(\s*([^,]*),\s*([^)]*)\)(?=\s*(?:\.toString\(\)|new URLSearchParams))/g,
+    severity: "low" as const,
+    title: "Unsafe URLSearchParams Manipulation",
+    description: "Appending unvalidated user input to URLSearchParams could lead to XSS when the resulting URL is used in a dangerous context.",
+    recommendation: "Validate and sanitize parameters before adding them to URLSearchParams.",
+    recommendationCode: `// Instead of:
+const params = new URLSearchParams();
+params.append('q', userInput);
+someElement.src = 'https://example.com/search?' + params.toString();
+
+// Validate and sanitize first:
+function addSafeParam(params, name, value) {
+  // Remove potentially dangerous characters
+  const sanitized = String(value).replace(/[<>(){}\\[\\]'"\`]/g, '');
+  params.append(name, sanitized);
+}
+
+const params = new URLSearchParams();
+addSafeParam(params, 'q', userInput);
+someElement.src = 'https://example.com/search?' + params.toString();`
   }
 ];
