@@ -637,17 +637,9 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     }
   }
   
-  // Apply user input evidence to confidence score in more sophisticated way
+  // Apply user input evidence to confidence score
   if (userInputEvidenceFound) {
-    // Increase confidence based on evidence strength
     confidence += userInputEvidenceStrength;
-    
-    // Special case: If we have very strong evidence of user input AND we're in a critical context
-    // like innerHTML, eval, etc. then this is almost certainly a real vulnerability
-    if (userInputEvidenceStrength >= 0.2 && 
-        ["innerHTML", "eval", "Function", "dangerouslySetInnerHTML", "scriptSrc"].includes(vulnType)) {
-      confidence = Math.min(confidence + 0.15, 0.95);  // Cap at 0.95 to avoid absolute certainty
-    }
   }
   
   // Enhanced sanitization detection with more robust patterns
@@ -755,17 +747,6 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     // Check if it's a resource URL with no user input
     if (/\.(?:src|href)\s*=\s*['"](?:https?:)?\/\//.test(context) && !userInputEvidenceFound) {
       confidence -= 0.2;
-    }
-    
-    // Relative URLs are generally safer
-    if (/\.(?:src|href)\s*=\s*['"](?!https?:)[\.\/][^'"]*['"]/.test(context) && !userInputEvidenceFound) {
-      confidence -= 0.2;
-    }
-    
-    // Check for proper URL validation before assignment
-    const safeLookBehind = context.substring(Math.max(0, match.index - 200), match.index);
-    if (/\bif\s*\([^)]*?(?:startsWith|indexOf|includes|test)\s*\([^)]*?(?:https?:|www\.|\/\/)\s*\)/.test(safeLookBehind)) {
-      confidence -= 0.25; // Strong validation evidence
     }
   }
   
