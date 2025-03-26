@@ -3777,5 +3777,425 @@ function loadScriptSafely(url) {
   script.src = url;
   document.head.appendChild(script);
 }`
+  },
+  
+  // URL Fragment Based XSS
+  {
+    type: "urlFragmentXSS",
+    regex: /document\.write\s*\(\s*.*?location\.hash/g,
+    severity: "high" as const,
+    title: "URL Fragment Based XSS",
+    description: "Using window.location.hash in document.write without sanitization can lead to XSS when users visit specially crafted URLs.",
+    recommendation: "Never use URL fragments (hash) directly in DOM operations without strict validation and sanitization.",
+    recommendationCode: `// UNSAFE:
+// document.write('<div>' + location.hash.substring(1) + '</div>');
+
+// SAFE approach:
+import DOMPurify from 'dompurify';
+
+// Option 1: Only extract and use specific parameters from hash
+function getHashParam(param) {
+  const hash = location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  return params.get(param); // Returns null if param doesn't exist
+}
+
+// Option 2: If HTML content is needed, sanitize first
+const hashContent = location.hash.substring(1);
+const safeContent = DOMPurify.sanitize(hashContent);
+document.getElementById('content').innerHTML = safeContent;`
+  },
+  
+  // WebSocket Message Injection
+  {
+    type: "webSocketInjection",
+    regex: /\.send\s*\(\s*JSON\.stringify\s*\(\s*\{[^}]*message\s*:\s*([^}]*)\}\s*\)/g,
+    severity: "medium" as const,
+    title: "WebSocket Message Injection",
+    description: "Sending unsanitized user input via WebSockets can lead to XSS if the receiving end renders the message content as HTML.",
+    recommendation: "Sanitize or escape user input before sending it through WebSockets, especially chat or messaging functionality.",
+    recommendationCode: `// UNSAFE:
+// const userMessage = document.getElementById('message-input').value;
+// socket.send(JSON.stringify({ message: userMessage }));
+
+// SAFE approach:
+function sendSafeMessage(socket, messageText) {
+  // Option 1: HTML escape the message on the client side
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+  
+  const safeMessage = escapeHtml(messageText);
+  socket.send(JSON.stringify({ 
+    message: safeMessage,
+    raw: messageText // Include original for text-only clients
+  }));
+  
+  // Option 2: Flag the content type to instruct the receiver
+  socket.send(JSON.stringify({
+    message: messageText,
+    contentType: 'text' // Explicitly instruct receiver not to render as HTML
+  }));
+}`
+  },
+  
+  // Vue v-bind:HTML
+  {
+    type: "vueVBind",
+    regex: /v-html\s*=\s*["'][^"']*["']/g,
+    severity: "high" as const,
+    title: "Unsafe Vue v-html Usage",
+    description: "Vue.js v-html directive renders content as HTML without sanitization, allowing XSS if user input is used.",
+    recommendation: "Avoid v-html with user input. Use v-text or mustache syntax ({{ }}) for displaying text.",
+    recommendationCode: `<!-- Instead of: -->
+<!-- <div v-html="userMessage"></div> -->
+
+<!-- Use v-text or mustache syntax: -->
+<div v-text="userMessage"></div>
+<!-- or -->
+<div>{{ userMessage }}</div>
+
+<!-- If you must use HTML, sanitize first: -->
+<!-- In your component: -->
+<script>
+import DOMPurify from 'dompurify';
+
+export default {
+  data() {
+    return {
+      userMessage: '<p>User input</p>'
+    }
+  },
+  computed: {
+    sanitizedMessage() {
+      return DOMPurify.sanitize(this.userMessage);
+    }
+  }
+}
+</script>
+
+<!-- Then in your template: -->
+<div v-html="sanitizedMessage"></div>`
+  },
+  
+  // Angular NgStyle Injection
+  {
+    type: "angularNgStyle",
+    regex: /\[ngStyle\]\s*=\s*["'].*?expression\s*:\s*.*?["']/g,
+    severity: "medium" as const,
+    title: "Angular [ngStyle] Injection",
+    description: "Using user input in Angular's [ngStyle] directive can lead to style-based XSS attacks, particularly using the expression property.",
+    recommendation: "Validate and sanitize input used in [ngStyle] directives, or use CSS classes instead of dynamic styles.",
+    recommendationCode: `<!-- UNSAFE: -->
+<!-- <div [ngStyle]="{'background-image': 'url(' + userInput + ')'}"></div> -->
+
+<!-- SAFER approach - validate URLs: -->
+<script>
+import { SafeUrl, DomSanitizer } from '@angular/platform-browser';
+
+@Component({/*...*/})
+export class MyComponent {
+  constructor(private sanitizer: DomSanitizer) {}
+  
+  getSafeBackgroundStyle(url: string): any {
+    // Validate URL format
+    if (!url.match(/^https:\\/\\/[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(\\/[^"']*)?$/)) {
+      return {'background-image': 'none'};
+    }
+    
+    // Use Angular's sanitizer
+    const safeUrl = this.sanitizer.sanitize(SecurityContext.URL, url);
+    return {'background-image': \`url(\${safeUrl})\`};
+  }
+}
+</script>
+
+<!-- Then in template: -->
+<div [ngStyle]="getSafeBackgroundStyle(userProvidedUrl)"></div>
+
+<!-- OR Use CSS classes instead: -->
+<div [class]="userSelectedTheme"></div>`
+  },
+  
+  // JSONP Callback Injection
+  {
+    type: "jsonpInjection",
+    regex: /callback=\s*\$/g,
+    severity: "high" as const,
+    title: "JSONP Callback Injection",
+    description: "Using user-provided input as JSONP callback names can lead to XSS if the callback parameter is not validated.",
+    recommendation: "Restrict callback parameter values to alphanumeric characters and validate them against a whitelist.",
+    recommendationCode: `// UNSAFE:
+// const callbackName = req.query.callback;
+// res.send(\`\${callbackName}(\${JSON.stringify(data)})\`);
+
+// SAFE approach:
+function validateCallbackName(callback) {
+  // Only allow alphanumeric characters, underscore and dots
+  if (typeof callback !== 'string') return false;
+  
+  return /^[a-zA-Z0-9_\\.]+$/.test(callback);
+}
+
+// Server-side handler (Express.js example)
+app.get('/api/jsonp', (req, res) => {
+  const callbackName = req.query.callback;
+  
+  if (!validateCallbackName(callbackName)) {
+    return res.status(400).send('Invalid callback name');
+  }
+  
+  const data = { /* your API data */ };
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(\`\${callbackName}(\${JSON.stringify(data)})\`);
+});`
+  },
+  
+  // CSP Nonce Bypass
+  {
+    type: "cspNonceBypass",
+    regex: /document\.querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)\s*\.nonce/g,
+    severity: "critical" as const,
+    title: "CSP Nonce Exfiltration",
+    description: "Extracting CSP nonces from script tags and reusing them can bypass Content Security Policy protections.",
+    recommendation: "Don't expose CSP nonces to untrusted code. Use strict CSP and avoid inline event handlers.",
+    recommendationCode: `// DANGEROUS CODE - Extracts CSP nonces:
+// const cspNonce = document.querySelector('script[nonce]').nonce;
+// const scriptEl = document.createElement('script');
+// scriptEl.nonce = cspNonce; // Bypasses CSP by reusing valid nonce
+// scriptEl.src = maliciousUrl;
+// document.head.appendChild(scriptEl);
+
+// PREVENTION STRATEGIES:
+// 1. Server-side headers (Node.js/Express example)
+app.use((req, res, next) => {
+  // Generate unique nonce per request
+  const nonce = crypto.randomBytes(16).toString('base64');
+  
+  // Apply strict CSP with nonce and no unsafe-inline
+  res.setHeader(
+    'Content-Security-Policy',
+    \`script-src 'nonce-\${nonce}' 'strict-dynamic' https:; object-src 'none'; base-uri 'none';\`
+  );
+  
+  // Make nonce available to templates
+  res.locals.cspNonce = nonce;
+  next();
+});
+
+// 2. Don't use DOM APIs to expose nonces to JavaScript
+// In your template, use the nonce directly from server:
+// <script nonce="<%= cspNonce %>">
+//   // Your scripts here
+// </script>`
+  },
+  
+  // Iframe srcdoc Injection
+  {
+    type: "iframeSrcdocInjection",
+    regex: /\.srcdoc\s*=\s*[^;]*\+/g,
+    severity: "high" as const,
+    title: "iframe srcdoc Injection",
+    description: "Setting the srcdoc attribute of iframes with unsanitized input can lead to XSS in the iframe context.",
+    recommendation: "Sanitize HTML content before setting iframe.srcdoc, or use data URL with text/plain MIME type.",
+    recommendationCode: `// UNSAFE:
+// iframe.srcdoc = '<h1>' + userProvidedHTML + '</h1>';
+
+// SAFE approach:
+import DOMPurify from 'dompurify';
+
+// Option 1: Sanitize before setting srcdoc
+iframe.srcdoc = DOMPurify.sanitize('<h1>' + userProvidedHTML + '</h1>', {
+  SANITIZE_DOM: true,
+  FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick']
+});
+
+// Option 2: Use text content only in a controlled HTML structure
+iframe.srcdoc = '<html><body><div>' + 
+                escapeHtml(userMessage) + 
+                '</div></body></html>';
+
+// Helper function to escape HTML
+function escapeHtml(html) {
+  const div = document.createElement('div');
+  div.textContent = html;
+  return div.innerHTML;
+}`
+  },
+  
+  // Event Source XSS
+  {
+    type: "eventSourceXSS",
+    regex: /new EventSource\s*\(/g,
+    severity: "medium" as const,
+    title: "EventSource Potential CSRF/XSS",
+    description: "Using EventSource API without proper CORS and CSRF protections can lead to cross-site request forgery or data exfiltration.",
+    recommendation: "Implement proper server-side validation and CORS headers for SSE endpoints.",
+    recommendationCode: `// CLIENT-SIDE:
+// POTENTIALLY UNSAFE without server validation:
+// const eventSource = new EventSource('/api/events?param=' + userInput);
+
+// SAFER approach:
+// 1. Only use validated parameters
+const validatedParam = validateAndSanitizeParam(userInput); 
+const eventSource = new EventSource(\`/api/events?param=\${validatedParam}\`);
+
+// 2. Include CSRF token in URL
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const source = new EventSource(\`/api/events?_csrf=\${csrfToken}\`);
+
+// SERVER-SIDE (Node.js/Express example):
+// Protect your SSE endpoint
+app.get('/api/events', (req, res) => {
+  // 1. Verify authentication
+  if (!req.user) {
+    return res.status(401).end();
+  }
+  
+  // 2. Validate CSRF token
+  if (!validateCSRFToken(req)) {
+    return res.status(403).end();
+  }
+  
+  // 3. Set appropriate headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // 4. Only allow specific origins
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  // Now send SSE data...
+});`
+  },
+  
+  // HTML Comments Escape XSS
+  {
+    type: "htmlCommentEscapeXSS",
+    regex: /<!--.*?-->/g,
+    severity: "low" as const,
+    title: "HTML Comment Escape XSS",
+    description: "Improper HTML comment usage can lead to XSS if user input is included within comments and the comment is malformed or closed by the input.",
+    recommendation: "Don't include user input within HTML comments, or ensure it's properly escaped.",
+    recommendationCode: `// UNSAFE:
+// const commentedCode = '<!-- Debug info: ' + userInput + ' -->';
+// element.innerHTML = commentedCode;
+
+// SAFE approaches:
+// 1. Don't put user input in comments at all
+// Use data attributes instead:
+element.dataset.debugInfo = userInput;
+
+// 2. If you must include user input in comments, sanitize first:
+function createSafeComment(userInput) {
+  // Replace any potential comment-ending sequences
+  const sanitized = userInput
+    .replace(/--/g, '&#45;&#45;')
+    .replace(/>/g, '&gt;');
+    
+  return '<!-- Debug info: ' + sanitized + ' -->';
+}
+
+// 3. Better yet, use a safer alternative to innerHTML:
+const comment = document.createComment('Debug info: ' + userInput);
+element.appendChild(comment);`
+  },
+  
+  // Content-Type Override
+  {
+    type: "contentTypeOverride",
+    regex: /\.contentType\s*=\s*["']application\/(?!json|xml)/g,
+    severity: "medium" as const,
+    title: "Content-Type MIME Sniffing Risk",
+    description: "Setting non-standard content types without proper X-Content-Type-Options header can lead to MIME sniffing attacks.",
+    recommendation: "Always set correct Content-Type headers and include X-Content-Type-Options: nosniff.",
+    recommendationCode: `// UNSAFE API response:
+// res.setHeader('Content-Type', 'application/octet-stream');
+// res.send(potentiallyDangerousData);
+
+// SAFE approach (Node.js/Express example):
+// Set correct content type
+res.setHeader('Content-Type', 'application/json');
+// Prevent MIME sniffing
+res.setHeader('X-Content-Type-Options', 'nosniff');
+// Send safe data
+res.send(JSON.stringify(safeData));
+
+// For file downloads:
+app.get('/download/:filename', (req, res) => {
+  // Validate filename is safe
+  const filename = validateFilename(req.params.filename);
+  
+  // Set appropriate content type
+  res.setHeader('Content-Type', determineContentType(filename));
+  // Prevent MIME sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Force download
+  res.setHeader('Content-Disposition', \`attachment; filename="\${filename}"\`);
+  
+  // Send file...
+});`
+  },
+  
+  // SVG Script Injection
+  {
+    type: "svgScriptInjection",
+    regex: /\.innerHTML\s*=\s*['"]<svg.*?<script/g,
+    severity: "high" as const,
+    title: "SVG Script Injection",
+    description: "SVG files can contain <script> tags, which will execute when the SVG is rendered in an HTML document via innerHTML.",
+    recommendation: "Sanitize SVG content before rendering it to HTML, or use image tags with proper content type validation.",
+    recommendationCode: `// UNSAFE:
+// element.innerHTML = '<svg>' + userProvidedSvgContent + '</svg>';
+
+// SAFE approaches:
+// 1. Sanitize SVG content with DOMPurify
+import DOMPurify from 'dompurify';
+
+// Configure DOMPurify to be strict with SVG
+DOMPurify.addHook('afterSanitizeAttributes', function(node) {
+  // Remove all event handlers
+  if (node.hasAttributes()) {
+    const attrs = node.attributes;
+    for (let i = attrs.length - 1; i >= 0; i--) {
+      const name = attrs[i].name;
+      if (name.startsWith('on')) {
+        node.removeAttribute(name);
+      }
+    }
+  }
+});
+
+// Then sanitize and render
+const sanitizedSvg = DOMPurify.sanitize(svgContent, {
+  USE_PROFILES: {svg: true},
+  FORBID_TAGS: ['script', 'foreignObject']
+});
+element.innerHTML = sanitizedSvg;
+
+// 2. Better yet, use an <img> tag with a blob URL
+function renderSafeSvg(svgContent, targetElement) {
+  // Create a safe blob
+  const safeContent = DOMPurify.sanitize(svgContent);
+  const blob = new Blob([safeContent], {type: 'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  
+  // Create and append image
+  const img = new Image();
+  img.src = url;
+  
+  // Clean up the blob URL when the image loads
+  img.onload = () => URL.revokeObjectURL(url);
+  
+  // Replace target content
+  targetElement.innerHTML = '';
+  targetElement.appendChild(img);
+}`
   }
 ];
