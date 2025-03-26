@@ -45,9 +45,15 @@ export default function Home() {
   const handleVulnerabilitySelect = (vuln: Vulnerability) => {
     setSelectedVulnerability(vuln);
     
-    // Scroll to results panel
+    // Scroll to specific vulnerability 
     setTimeout(() => {
-      if (resultsRef.current) {
+      const vulnElement = document.getElementById(`vuln-${vuln.type}`);
+      if (vulnElement) {
+        vulnElement.scrollIntoView({ behavior: 'smooth' });
+        // Add flash effect
+        vulnElement.classList.add('highlight-flash');
+      } else if (resultsRef.current) {
+        // Fallback if specific element not found
         resultsRef.current.scrollIntoView({ behavior: 'smooth' });
       }
     }, 100);

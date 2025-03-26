@@ -36,4 +36,15 @@
   .text-success {
     @apply text-green-600;
   }
+  
+  /* Flash effect for vulnerability highlighting */
+  @keyframes highlight-flash {
+    0% { @apply bg-blue-200; }
+    50% { @apply bg-blue-100; }
+    100% { @apply bg-transparent; }
+  }
+
+  .highlight-flash {
+    animation: highlight-flash 1.5s ease-out;
+  }
 }

@@ -128,11 +128,12 @@ export default function ResultsPanel({ results, isScanning, originalCode }: Resu
                     return severityOrder[a.severity] - severityOrder[b.severity];
                   })
                   .map((vulnerability) => (
-                    <VulnerabilityCard 
-                      key={vulnerability.id} 
-                      vulnerability={vulnerability} 
-                      originalCode={originalCode}
-                    />
+                    <div key={vulnerability.id} id={`vuln-${vulnerability.type}`}>
+                      <VulnerabilityCard 
+                        vulnerability={vulnerability} 
+                        originalCode={originalCode}
+                      />
+                    </div>
                   ))
                 }
               </div>
