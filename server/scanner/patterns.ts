@@ -4023,10 +4023,57 @@ app.get('/api/jsonp', (req, res) => {
 });`
   },
   
-  // CSP Nonce Theft and Script Injection
+  // Script Creation And Manipulation
   {
-    type: "cspNonceTheft",
-    regex: /(?:document\.querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)|querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)|getElementsByTagName\s*\(\s*['"]script['"]\s*\)|\w+\.nonce)\s*\.nonce/g,
+    type: "scriptCreation",
+    regex: /createElement\s*\(\s*['"]script['"]\s*\)/g,
+    severity: "high" as const,
+    title: "Dynamic Script Creation",
+    description: "Creating script elements dynamically can lead to code injection vulnerabilities, especially when the source or content is influenced by user input.",
+    recommendation: "Avoid dynamically creating script elements. If necessary, ensure strict validation of sources and use CSP (Content Security Policy).",
+    recommendationCode: `// UNSAFE:
+// const script = document.createElement('script');
+// script.src = userControlledUrl; // Danger: remote code execution
+// document.head.appendChild(script);
+
+// SAFER approaches:
+// 1. Avoid dynamic script creation entirely, use alternative techniques
+//    like fetch() to retrieve data instead
+
+// 2. If you must create scripts dynamically, implement strict validation
+function loadScript(url) {
+  // Validate allowed domains
+  const trustedDomains = ['trusted-cdn.com', 'your-domain.com'];
+  const urlObj = new URL(url);
+  
+  if (!trustedDomains.includes(urlObj.hostname)) {
+    console.error('Script domain not allowed:', urlObj.hostname);
+    return Promise.reject(new Error('Untrusted script domain'));
+  }
+  
+  // Use fetch instead of script injection when possible
+  return fetch(url)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.text();
+    })
+    .then(code => {
+      // Validate the code before executing it
+      // This is difficult to do safely - consider alternatives
+      
+      // Execute in a controlled manner
+      const functionFromCode = new Function(code);
+      return functionFromCode();
+    });
+}`
+  },
+
+  // CSP Nonce Access
+  {
+    type: "cspNonceAccess",
+    regex: /querySelector\s*\(\s*['"][^'"]*nonce[^'"]*['"]\s*\)|document\.querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)|nonce/g,
     severity: "critical" as const,
     title: "CSP Nonce Exfiltration",
     description: "Extracting CSP nonces from script tags and reusing them can bypass Content Security Policy protections.",
@@ -4062,10 +4109,10 @@ app.use((req, res, next) => {
 // </script>`
   },
   
-  // Script Element Creation with Nonce Setting
+  // Direct Nonce Assignment Detection
   {
     type: "scriptNonceAssignment",
-    regex: /\w+\.nonce\s*=\s*.*?nonce/g,
+    regex: /(\w+)\.nonce\s*=\s*(.+?)(;|\)|\n|$)/g,
     severity: "critical" as const,
     title: "CSP Nonce Exfiltration",
     description: "Extracting CSP nonces from script tags and reusing them can bypass Content Security Policy protections.",
