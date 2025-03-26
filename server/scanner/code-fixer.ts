@@ -460,6 +460,11 @@ function fixScriptSrc(code: string): string {
  * Fix for DOM Clobbering vulnerabilities
  */
 function fixDomClobbering(code: string): string {
+  // Check if code already contains our fix marker to avoid duplicate fixes
+  if (code.includes('// SECURITY FIX: Added DOM clobbering protection')) {
+    return code;
+  }
+  
   // Find getElementById calls with DOM property names as arguments
   const regex = /document\.getElementById\(\s*['"`](body|head|forms|length|name|id|firstChild|lastChild|nextSibling|previousSibling|parentNode|nodeName|nodeType|ownerDocument)['"`]\s*\)/g;
   
@@ -486,6 +491,11 @@ function fixDomClobbering(code: string): string {
  * Fix for meta tag content assignment vulnerabilities
  */
 function fixMetaTagContent(code: string): string {
+  // Check if code already contains our fix marker to avoid duplicate fixes  
+  if (code.includes('// SECURITY FIX: Added meta content sanitization')) {
+    return code;
+  }
+  
   const regex = /meta(?:Tag)?\.content\s*=\s*([^;]+)/g;
   
   return code.replace(regex, (match, content) => {
