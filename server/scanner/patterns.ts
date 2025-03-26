@@ -3841,10 +3841,44 @@ function sendSafeMessage(socket, messageText) {
 }`
   },
   
-  // Template String Injection
+  // Direct Console Log Injection
   {
-    type: "templateStringInjection",
-    regex: /(console\.log|send|emit|return|=|\+)\s*[`].*?\$\{.*?\}.*?[`]/g,
+    type: "consoleLogInjection",
+    regex: /console\.log\s*\(\s*[`].*?\$\{.*?\}.*?[`]\s*\)/g,
+    severity: "medium" as const,
+    title: "Console Log Template Injection",
+    description: "Using template literals with unsanitized user input in console.log statements can lead to information leakage or debugging issues.",
+    recommendation: "When logging user input, consider sanitizing or escaping the input before logging it.",
+    recommendationCode: `// UNSAFE:
+// console.log(\`User input: \${userInput}\`);
+
+// SAFER approaches:
+// Option 1: Escape special characters before logging
+function escapeSpecialChars(str) {
+  return str.replace(/[\\r\\n\\t\\v\\f\\\\]/g, match => {
+    switch (match) {
+      case '\\r': return '\\\\r';
+      case '\\n': return '\\\\n';
+      case '\\t': return '\\\\t';
+      case '\\v': return '\\\\v';
+      case '\\f': return '\\\\f';
+      case '\\\\': return '\\\\\\\\';
+      default: return match;
+    }
+  });
+}
+
+console.log(\`User input: \${escapeSpecialChars(userInput)}\`);
+
+// Option 2: For more structured logging, use JSON.stringify
+console.log('User input:', JSON.stringify(userInput));
+`
+  },
+
+  // Direct WebSocket String Interpolation
+  {
+    type: "webSocketTemplateInjection", 
+    regex: /(?:send|emit)\s*\(\s*`[^`]*?\$\{(?:message|msg|data|input|content|user)[^}]*?\}[^`]*?`\s*\)/g,
     severity: "high" as const,
     title: "Template String Injection",
     description: "Using template literals with unsanitized user input can lead to XSS vulnerabilities when the resulting content is rendered in the DOM or sent via WebSockets. This pattern detects WebSocket message injection, console.log injection, and other template string injection issues.",
