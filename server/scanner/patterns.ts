@@ -4558,7 +4558,8 @@ function renderSafeSvg(svgContent, targetElement) {
   // CSRF vulnerability with credentials included but no CSRF token
   {
     type: "credentialsWithoutCSRFToken",
-    regex: /(?:credentials\s*:\s*['"]include['"]|withCredentials\s*=\s*true)[^;{]*?(?!(?:(?:csrf|xsrf|token|nonce)['"]\s*:|['"]X-CSRF-Token['"]))/gi,
+    regex: /(?:credentials\s*:\s*['"]include['"]|withCredentials\s*=\s*true)[^;{}]*?(?!\s*headers[^;{}]*?(?:['"]X-CSRF-Token['"]|['"]CSRF-Token['"]|['"]X-XSRF-Token['"]|['"]_csrf['"]))/gi,
+    skipPattern: /['"]X-CSRF-Token['"]\s*:|['"]CSRF-Token['"]\s*:|['"]csrf_token['"]\s*:|['"]_csrf['"]\s*:|['"]xsrf['"]\s*:/i,
     severity: "critical" as const,
     title: "Credentials Sent Without CSRF Protection",
     description: "This code sends credentials (cookies) with the request but doesn't include a CSRF token, creating a severe CSRF vulnerability. An attacker can forge authenticated requests from a victim's browser.",

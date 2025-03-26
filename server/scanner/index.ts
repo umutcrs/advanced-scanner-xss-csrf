@@ -13,8 +13,8 @@ import { v4 as uuidv4 } from "uuid";
 // Fine-tuned thresholds for optimal true/false positive balance
 const CONFIDENCE_THRESHOLD = 0.35; // Balanced threshold that catches real issues without too many false positives
 const LOW_CONFIDENCE_THRESHOLD = 0.25; // Lower threshold for low severity issues to ensure they're reported
-const CRITICAL_CONFIDENCE_THRESHOLD = 0.50; // Higher threshold for critical severity to reduce false positives
-const HIGH_CONFIDENCE_THRESHOLD = 0.40; // Threshold for high severity issues
+const CRITICAL_CONFIDENCE_THRESHOLD = 0.60; // Higher threshold for critical severity to reduce false positives
+const HIGH_CONFIDENCE_THRESHOLD = 0.45; // Threshold for high severity issues
 
 /**
  * Advanced scanning engine for detecting XSS vulnerabilities in JavaScript code

@@ -505,7 +505,7 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     // CSRF-specific patterns - critical severity
     "formCSRFVulnerability": 0.90,
     "dynamicFormCSRFVulnerability": 0.90,
-    "credentialsWithoutCSRFToken": 0.85,
+    "credentialsWithoutCSRFToken": 0.75, // Reduced to fix false positives
     "improperDoubleSubmitCookieImplementation": 0.85,
     "missingSameSiteCookieAttribute": 0.80,
     
