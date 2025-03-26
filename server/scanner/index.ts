@@ -51,22 +51,45 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         const lineEndIndex = preparedCode.indexOf('\n', matchLocation);
         const lineContent = preparedCode.substring(lineStartIndex, lineEndIndex !== -1 ? lineEndIndex : preparedCode.length);
         
-        // Özel kontroller: İlgili fonksiyon içeriğini kontrol et (CSRF token baş belirteçleri için)
+        // Özel kontroller: CSRF token kontrolü için tüm kodu kapsayan detaylı bir analiz yapalım
         if (pattern.type === "credentialsWithoutCSRFToken") {
-          // Daha geniş bir bağlam alarak fonksiyon içini kontrol et
-          const functionStartIndex = preparedCode.lastIndexOf('function', matchLocation);
-          if (functionStartIndex !== -1) {
-            // İşlev bloğunun sonunu bul
-            const functionEndPos = preparedCode.indexOf('}', preparedCode.indexOf('{', functionStartIndex));
-            if (functionEndPos !== -1) {
-              const functionContent = preparedCode.substring(functionStartIndex, functionEndPos);
-              // CSRF token başlık kullanımı varsa, bu güvenli bir kod
-              if (functionContent.includes('X-CSRF-Token') || 
-                 functionContent.includes('CSRF-Token') || 
-                 functionContent.includes('_csrf') || 
-                 functionContent.includes('csrf_token')) {
-                continue; // Güvenli kod, alarm verme
+          // Kapsamlı bir kod analizini yapabilmek için daha geniş bir bağlam alalım
+          const matchLocation = match.index;
+          const remainingCode = preparedCode.substring(matchLocation);
+          const curlyEndIndex = remainingCode.indexOf('}');
+          
+          if (curlyEndIndex !== -1) {
+            const matchEndPos = matchLocation + curlyEndIndex + 1;
+            const curlyStartIndex = preparedCode.lastIndexOf('{', matchLocation);
+            const functionStartIndex = preparedCode.lastIndexOf('function', matchLocation);
+            
+            // Hem içinde bulunduğu fonksiyonu hem de fetch bloğunu kontrol et
+            const blockToAnalyze = preparedCode.substring(
+              functionStartIndex !== -1 ? functionStartIndex : curlyStartIndex !== -1 ? curlyStartIndex : Math.max(0, matchLocation - 500),
+              matchEndPos !== -1 ? matchEndPos : Math.min(preparedCode.length, matchLocation + 500)
+            );
+            
+            // CSRF token kontrolü için regex desenimiz - tüm olası kombinasyonları içeriyor
+            const csrfTokenPattern = /['"](?:X-CSRF-Token|CSRF-Token|X-XSRF-Token|csrf-token|xsrf-token|_csrf|csrfToken)['"]|csrfToken|['"]csrf[_-]token['"]/i;
+            
+            if (csrfTokenPattern.test(blockToAnalyze)) {
+              // CSRF token kullanımı tespit edildi, bu güvenli bir kod
+              continue;
+            }
+            
+            // Headers içinde CSRF token kontrolü
+            if (/headers\s*[=:]\s*\{[^}]*\}/i.test(blockToAnalyze)) {
+              const headersMatch = blockToAnalyze.match(/headers\s*[=:]\s*\{([^}]*)\}/i);
+              if (headersMatch && csrfTokenPattern.test(headersMatch[1])) {
+                // Headers içinde CSRF token var, bu güvenli
+                continue;
               }
+            }
+            
+            // setRequestHeader içinde CSRF kontrolü
+            if (/setRequestHeader\s*\(\s*['"](?:X-CSRF-Token|CSRF-Token|X-XSRF-Token|csrf-token|xsrf-token|_csrf)['"].*?\)/i.test(blockToAnalyze)) {
+              // setRequestHeader ile CSRF token eklenmiş, bu güvenli
+              continue;
             }
           }
         }
