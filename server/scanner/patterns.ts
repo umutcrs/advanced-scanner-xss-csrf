@@ -3841,13 +3841,13 @@ function sendSafeMessage(socket, messageText) {
 }`
   },
   
-  // WebSocket Raw Message Injection
+  // Template String Injection
   {
-    type: "webSocketRawInjection",
-    regex: /[`'"].*?\$\{(?:\w+)\}.*?[`'"]/g,
+    type: "templateStringInjection",
+    regex: /(console\.log|send|emit|return|=|\+)\s*[`].*?\$\{.*?\}.*?[`]/g,
     severity: "high" as const,
-    title: "WebSocket Raw Message Injection",
-    description: "Sending unsanitized user input via WebSockets using string interpolation can lead to XSS vulnerabilities when the receiving end renders the content.",
+    title: "Template String Injection",
+    description: "Using template literals with unsanitized user input can lead to XSS vulnerabilities when the resulting content is rendered in the DOM or sent via WebSockets. This pattern detects WebSocket message injection, console.log injection, and other template string injection issues.",
     recommendation: "Always sanitize or escape user content before sending it through WebSockets.",
     recommendationCode: `// UNSAFE:
 // ws.send(\`Message: \${userInput}\`);
