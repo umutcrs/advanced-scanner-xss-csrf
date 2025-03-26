@@ -1,12 +1,15 @@
 import { ScanResult } from "@shared/schema";
 import VulnerabilityCard from "./vulnerability-card";
+import { useState } from "react";
 
 interface ResultsPanelProps {
   results: ScanResult | null;
   isScanning: boolean;
+  originalCode: string;
+  onCodeFixed: (fixedCode: string) => void;
 }
 
-export default function ResultsPanel({ results, isScanning }: ResultsPanelProps) {
+export default function ResultsPanel({ results, isScanning, originalCode, onCodeFixed }: ResultsPanelProps) {
   // Helper function to get the background color based on severity
   const getSeverityBgColor = (severity: string) => {
     switch (severity) {
@@ -122,7 +125,12 @@ export default function ResultsPanel({ results, isScanning }: ResultsPanelProps)
                     return severityOrder[a.severity] - severityOrder[b.severity];
                   })
                   .map((vulnerability) => (
-                    <VulnerabilityCard key={vulnerability.id} vulnerability={vulnerability} />
+                    <VulnerabilityCard 
+                      key={vulnerability.id} 
+                      vulnerability={vulnerability} 
+                      originalCode={originalCode}
+                      onCodeFixed={onCodeFixed}
+                    />
                   ))
                 }
               </div>

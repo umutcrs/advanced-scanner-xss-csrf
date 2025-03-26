@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function Home() {
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [currentCode, setCurrentCode] = useState<string>("");
   const { toast } = useToast();
 
   const scanMutation = useMutation({
@@ -32,7 +33,24 @@ export default function Home() {
 
   const handleScan = async (code: string, fileName?: string) => {
     setIsScanning(true);
+    setCurrentCode(code);
     scanMutation.mutate({ code, fileName });
+  };
+  
+  const handleCodeFixed = (fixedCode: string) => {
+    // Update the current code to the fixed version
+    setCurrentCode(fixedCode);
+    
+    // Show notification
+    toast({
+      title: "Kod güncellendi",
+      description: "Güvenlik açıklarının düzeltildiği kod editöre yüklendi. Yeni bir tarama yapmak için 'Tara' butonuna tıklayabilirsiniz.",
+      variant: "default",
+    });
+    
+    // Optionally, you can trigger a new scan with the fixed code
+    // setIsScanning(true);
+    // scanMutation.mutate({ code: fixedCode });
   };
 
   return (
@@ -62,7 +80,12 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <CodeInputPanel onScan={handleScan} isScanning={isScanning} />
-          <ResultsPanel results={scanResults} isScanning={isScanning} />
+          <ResultsPanel 
+            results={scanResults} 
+            isScanning={isScanning} 
+            originalCode={currentCode}
+            onCodeFixed={handleCodeFixed}
+          />
         </div>
       </main>
 
