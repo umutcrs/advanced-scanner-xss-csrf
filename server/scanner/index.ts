@@ -51,11 +51,35 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         const lineEndIndex = preparedCode.indexOf('\n', matchLocation);
         const lineContent = preparedCode.substring(lineStartIndex, lineEndIndex !== -1 ? lineEndIndex : preparedCode.length);
         
+        // Özel kontroller: İlgili fonksiyon içeriğini kontrol et (CSRF token baş belirteçleri için)
+        if (pattern.type === "credentialsWithoutCSRFToken") {
+          // Daha geniş bir bağlam alarak fonksiyon içini kontrol et
+          const functionStartIndex = preparedCode.lastIndexOf('function', matchLocation);
+          if (functionStartIndex !== -1) {
+            // İşlev bloğunun sonunu bul
+            const functionEndPos = preparedCode.indexOf('}', preparedCode.indexOf('{', functionStartIndex));
+            if (functionEndPos !== -1) {
+              const functionContent = preparedCode.substring(functionStartIndex, functionEndPos);
+              // CSRF token başlık kullanımı varsa, bu güvenli bir kod
+              if (functionContent.includes('X-CSRF-Token') || 
+                 functionContent.includes('CSRF-Token') || 
+                 functionContent.includes('_csrf') || 
+                 functionContent.includes('csrf_token')) {
+                continue; // Güvenli kod, alarm verme
+              }
+            }
+          }
+        }
+        
         // Satırda veya sonraki 3 satırda skipPattern'e uyan bir şey var mı?
         const nextLinesEndIndex = preparedCode.indexOf('\n', preparedCode.indexOf('\n', preparedCode.indexOf('\n', lineEndIndex + 1) + 1) + 1);
         const nextLinesContent = preparedCode.substring(lineStartIndex, nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length);
+        const fullFunctionContent = preparedCode.substring(
+          Math.max(0, lineStartIndex - 200), 
+          Math.min(preparedCode.length, (nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length) + 200)
+        );
         
-        if (pattern.skipPattern.test(nextLinesContent)) {
+        if (pattern.skipPattern.test(nextLinesContent) || pattern.skipPattern.test(fullFunctionContent)) {
           // Bu bir düzeltilmiş kod parçası, atla
           continue;
         }
