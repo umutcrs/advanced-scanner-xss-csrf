@@ -4428,10 +4428,48 @@ function renderSafeSvg(svgContent, targetElement) {
 
   // CSRF Protection Vulnerabilities
 
+  // CSRF vulnerability with credentials included but no CSRF token
+  {
+    type: "credentialsWithoutCSRFToken",
+    regex: /(?:credentials\s*:\s*['"]include['"]|withCredentials\s*=\s*true)[^;{]*?(?!(?:(?:csrf|xsrf|token|nonce)['"]\s*:|['"]X-CSRF-Token['"]))/gi,
+    severity: "critical" as const,
+    title: "Credentials Sent Without CSRF Protection",
+    description: "This code sends credentials (cookies) with the request but doesn't include a CSRF token, creating a severe CSRF vulnerability. An attacker can forge authenticated requests from a victim's browser.",
+    recommendation: "Always include CSRF tokens when making requests with credentials and validate them on the server.",
+    recommendationCode: `// UNSAFE - Credentials without CSRF protection:
+// fetch('/api/update-profile', {
+//   method: 'POST',
+//   credentials: 'include',  // Sends cookies but no CSRF protection!
+//   body: JSON.stringify(userData)
+// });
+
+// SAFE - Include CSRF token with credentials:
+function safeAuthenticatedRequest(url, method, data) {
+  // Get CSRF token from meta tag or cookie
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                    getCookie('XSRF-TOKEN');
+  
+  if (!csrfToken) {
+    console.error('Missing CSRF token - cannot make secure request');
+    return Promise.reject(new Error('Missing CSRF token'));
+  }
+  
+  return fetch(url, {
+    method: method,
+    credentials: 'include',  // Send cookies
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken  // Add CSRF token header
+    },
+    body: JSON.stringify(data)
+  });
+}`
+  },
+
   // Missing CSRF token validation in form submissions
   {
     type: "missingCSRFToken",
-    regex: /(?:fetch|XMLHttpRequest|ajax|axios\.(?:post|put|delete|patch)|new\s+FormData\([^)]*\))[^;{]*(?!(?:csrf|xsrf|token|nonce)).*?(?:method\s*:\s*['"](?:POST|PUT|DELETE|PATCH)['"])/gi,
+    regex: /(?:fetch|XMLHttpRequest|ajax|axios)(?:\s*\.\s*(?:post|put|delete|patch)|\([^)]*\)[^;{]*method\s*:\s*['"](?:POST|PUT|DELETE|PATCH)['"])[^;{]*?(?!(?:(?:csrf|xsrf|token|nonce)['"]\s*:|['"]X-CSRF-Token['"]))/gi,
     severity: "critical" as const,
     title: "Missing CSRF Token in Form Submission",
     description: "This code makes a state-changing request without including a CSRF token, which could allow attackers to forge requests on behalf of authenticated users.",
