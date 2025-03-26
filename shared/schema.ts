@@ -27,28 +27,8 @@ export const vulnerabilitySchema = z.object({
   column: z.number().optional(),
   code: z.string(),
   recommendation: z.string(),
-  recommendationCode: z.string().optional(),
-  fixedCode: z.string().optional(), // The fixed/safe version of the vulnerable code
-  autoFixable: z.boolean().optional(), // Whether this vulnerability can be automatically fixed
+  recommendationCode: z.string().optional()
 });
-
-export const codeFixRequestSchema = z.object({
-  vulnerabilityId: z.string(),
-  originalCode: z.string(),
-  vulnerabilityType: z.string(),
-  line: z.number().optional(),
-  column: z.number().optional(),
-});
-
-export type CodeFixRequest = z.infer<typeof codeFixRequestSchema>;
-
-export const codeFixResponseSchema = z.object({
-  fixedCode: z.string(),
-  success: z.boolean(),
-  message: z.string().optional(),
-});
-
-export type CodeFixResponse = z.infer<typeof codeFixResponseSchema>;
 
 export type Vulnerability = z.infer<typeof vulnerabilitySchema>;
 
