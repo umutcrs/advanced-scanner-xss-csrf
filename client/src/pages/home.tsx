@@ -12,6 +12,8 @@ export default function Home() {
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [currentCode, setCurrentCode] = useState<string>("");
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const scanMutation = useMutation({
@@ -38,11 +40,6 @@ export default function Home() {
     setCurrentCode(code);
     scanMutation.mutate({ code, fileName });
   };
-  
-
-
-  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   // Handle clicking on a vulnerability in the threat map
   const handleVulnerabilitySelect = (vuln: Vulnerability) => {
