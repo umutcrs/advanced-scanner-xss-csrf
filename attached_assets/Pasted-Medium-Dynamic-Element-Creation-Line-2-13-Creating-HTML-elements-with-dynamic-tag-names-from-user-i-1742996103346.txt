@@ -1,0 +1,87 @@
+Medium
+Dynamic Element Creation
+Line 2:13
+
+Creating HTML elements with dynamic tag names from user input can lead to unexpected elements or XSS.
+
+Vulnerable Code
+function safelyCreateElement (message) {
+  const div = document.createElement ('div');
+  div.className = 'message';
+  ...
+Recommendation
+Never use user input to determine element tag names.
+
+// Instead of:
+// const tagName = userInput; // DANGEROUS
+// const element = document.createElement(tagName);
+
+// Use a whitelist approach:
+function createSafeElement(tagName) {
+  const allowedTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li'];
+  
+  if (!allowedTags.includes(tagName.toLowerCase())) {
+    console.error('Attempted to create disallowed element type:', tagName);
+    return document.createElement('span'); // fallback to safe element
+  }
+  
+  return document.createElement(tagName);
+}
+Medium
+Dynamic Element Creation
+Line 4:16
+
+Creating HTML elements with dynamic tag names from user input can lead to unexpected elements or XSS.
+
+Vulnerable Code
+...div.className = 'message';
+const strong = document.createElement ('strong');
+strong.textContent = 'Message: ';
+...
+Recommendation
+Never use user input to determine element tag names.
+
+// Instead of:
+// const tagName = userInput; // DANGEROUS
+// const element = document.createElement(tagName);
+
+// Use a whitelist approach:
+function createSafeElement(tagName) {
+  const allowedTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li'];
+  
+  if (!allowedTags.includes(tagName.toLowerCase())) {
+    console.error('Attempted to create disallowed element type:', tagName);
+    return document.createElement('span'); // fallback to safe element
+  }
+  
+  return document.createElement(tagName);
+}
+Medium
+Dynamic Element Creation
+Line 6:14
+
+Creating HTML elements with dynamic tag names from user input can lead to unexpected elements or XSS.
+
+Vulnerable Code
+...strong.textContent = 'Message: ';
+const span = document.createElement ('span');
+span.textContent = message;
+...
+Recommendation
+Never use user input to determine element tag names.
+
+// Instead of:
+// const tagName = userInput; // DANGEROUS
+// const element = document.createElement(tagName);
+
+// Use a whitelist approach:
+function createSafeElement(tagName) {
+  const allowedTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'ul', 'ol', 'li'];
+  
+  if (!allowedTags.includes(tagName.toLowerCase())) {
+    console.error('Attempted to create disallowed element type:', tagName);
+    return document.createElement('span'); // fallback to safe element
+  }
+  
+  return document.createElement(tagName);
+}

@@ -943,7 +943,7 @@ $('#container').append($div);`
   },
   {
     type: "documentCreateElement",
-    regex: /document\.createElement\s*\(\s*(?:(?:variable\s*=\s*)|(?:[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*))?([^)]*)\)/g,
+    regex: /document\.createElement\s*\(\s*(?:(?:variable\s*=\s*)|(?:[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*))(?!['"](div|span|p|h[1-6]|ul|ol|li|a|button|img|input|form|label|select|option|textarea|table|tr|td|th|thead|tbody|tfoot|header|footer|nav|main|section|article|aside)['"])([^)]*)\)/g,
     severity: "medium" as const,
     title: "Dynamic Element Creation",
     description: "Creating HTML elements with dynamic tag names from user input can lead to unexpected elements or XSS.",
