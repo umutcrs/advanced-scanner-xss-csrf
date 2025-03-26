@@ -27,7 +27,10 @@ export const vulnerabilitySchema = z.object({
   column: z.number().optional(),
   code: z.string(),
   recommendation: z.string(),
-  recommendationCode: z.string().optional()
+  recommendationCode: z.string().optional(),
+  patternFound: z.string().optional(),
+  codeContext: z.string().optional(),
+  detectionConfidence: z.number().optional()
 });
 
 export type Vulnerability = z.infer<typeof vulnerabilitySchema>;
