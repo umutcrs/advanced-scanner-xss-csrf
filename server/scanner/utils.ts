@@ -502,6 +502,13 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "prototypeExpando": 0.90,
     "sanitizationBypass": 0.95, // New pattern - high confidence
     
+    // CSRF-specific patterns - critical severity
+    "formCSRFVulnerability": 0.90,
+    "dynamicFormCSRFVulnerability": 0.90,
+    "credentialsWithoutCSRFToken": 0.85,
+    "improperDoubleSubmitCookieImplementation": 0.85,
+    "missingSameSiteCookieAttribute": 0.80,
+    
     // High severity
     "insertAdjacentHTML": 0.80,
     "documentWrite": 0.80,
@@ -526,6 +533,13 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "mutationXSS": 0.85, // New pattern - high confidence
     "clientTemplateInjection": 0.80, // New pattern - good confidence
     
+    // CSRF-specific patterns - high severity
+    "xhrCSRFVulnerability": 0.80,
+    "getStateChangeCSRFVulnerability": 0.75,
+    "insecureCookieSettings": 0.80,
+    "jwtInLocalStorage": 0.75,
+    "csrfTokenReuse": 0.70,
+    
     // Medium severity
     "locationAssignment": 0.65,
     "locationHref": 0.65,
@@ -545,6 +559,7 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "cssExpressionInjection": 0.60,
     "domClobbering": 0.65,
     "directMetaTagContentAssignment": 0.65, // Adjusted for better accuracy
+    "missingFrameProtection": 0.65, // CSRF via clickjacking
     
     // Low severity
     "innerText": 0.45,
@@ -731,6 +746,55 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
   }
   
   // Enhanced context-specific adjustments based on vulnerability type
+  
+  // CSRF-specific vulnerability adjustments
+  if (/CSRF|csrf/i.test(vulnType)) {
+    // Check for CSRF protection mechanisms
+    if (/X-CSRF-Token|csrf_token|_csrf|XSRF-TOKEN|csrfProtection|SameSite\s*[=:]\s*['"]strict|samesite/i.test(context)) {
+      // Look closer at the context for proper implementation
+      if (/validateToken|verifyCSRF|samesite\s*[=:]\s*['"]strict/i.test(context)) {
+        confidence -= 0.3; // Proper implementation
+      } else {
+        confidence -= 0.15; // Some protection exists
+      }
+    }
+    
+    // Adjust for credential-less requests (not vulnerable to CSRF)
+    if (/credentials\s*:\s*['"]omit['"]/i.test(context) || /withCredentials\s*=\s*false/i.test(context)) {
+      confidence -= 0.4; // Significant reduction - requests without credentials aren't vulnerable to CSRF
+    }
+    
+    // Check for proper token validation with constant-time comparison
+    if (/crypto\.timingSafeEqual|constant-time|secureCompare/i.test(context)) {
+      confidence -= 0.25; // Good security practice
+    }
+    
+    // Check for non-cookie based auth methods (less vulnerable to CSRF)
+    if (/Authorization\s*:\s*['"]Bearer\s+/i.test(context) && !/localStorage\.getItem|sessionStorage\.getItem/i.test(context)) {
+      confidence -= 0.35; // Bearer token in header, not cookie-based auth
+    }
+    
+    // For SameSite cookie check
+    if (/missingSameSiteCookieAttribute/i.test(vulnType)) {
+      // If HttpOnly and Secure are properly set, it's at least partially protected
+      if (/httpOnly.*?secure|secure.*?httpOnly/i.test(context)) {
+        confidence -= 0.15;
+      }
+    }
+    
+    // For form CSRF vulnerabilities
+    if (/formCSRFVulnerability|dynamicFormCSRFVulnerability/i.test(vulnType)) {
+      // If the form appears to be just for GET/search, it's lower risk
+      if (/search|filter|find|query|get/i.test(context) && /method\s*[=:]\s*['"]GET/i.test(context)) {
+        confidence -= 0.25;
+      }
+      
+      // If proper token is added to the form
+      if (/appendChild\([^}]*?name\s*[=:]\s*['"](?:csrf|xsrf|token)['"]/i.test(context)) {
+        confidence -= 0.3;
+      }
+    }
+  }
   
   // URL and src related vulnerabilities
   if (/(?:href|src|url|location|href|uri|path)/i.test(vulnType)) {
