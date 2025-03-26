@@ -367,7 +367,6 @@ function validateServerSide(input) {
   {
     type: "scriptSrcAssignment",
     regex: /\b(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
-    skipPattern: /(?:\/\/\s*SECURITY\s*FIX:\s*Added\s*script\s*source\s*validation|\/\*\s*SECURITY-FIX-APPLIED:SCRIPTSRC\s*\*\/|trustedDomains|validateScriptSource)/,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
@@ -515,8 +514,6 @@ function UserContent({ content }) {
   {
     type: "eval",
     regex: /eval\s*\(([^)]*)\)/g,
-    // Düzeltilmiş kod için görmezden gelme kontrolü eklendi
-    skipPattern: /(?:\/\/\s*SECURITY\s*NOTICE:\s*eval\s*should\s*be\s*avoided|\/\*\s*SECURITY-FIX-APPLIED:EVAL\s*\*\/|console\.warn\s*\(\s*["']eval\(\)\s*replaced\s*with\s*safer\s*alternative)/,
     severity: "critical" as const,
     title: "Unsafe eval() Usage",
     description: "The use of eval() with user input creates a severe XSS vulnerability that allows arbitrary code execution.",
@@ -784,7 +781,6 @@ if (allowedActions.hasOwnProperty(actionName)) {
   {
     type: "scriptSrc",
     regex: /(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
-    skipPattern: /(?:\/\/\s*SECURITY\s*FIX:\s*Added\s*script\s*source\s*validation|\/\*\s*SECURITY-FIX-APPLIED:SCRIPTSRC\s*\*\/|trustedDomains|validateScriptSource)/,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
