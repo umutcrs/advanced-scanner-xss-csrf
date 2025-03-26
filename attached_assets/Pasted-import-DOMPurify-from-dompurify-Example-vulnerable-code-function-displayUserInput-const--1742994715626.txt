@@ -1,0 +1,72 @@
+import DOMPurify from 'dompurify';
+// Example vulnerable code
+function displayUserInput() {
+  const userInput = document.getElementById('user-input').value;
+  document.getElementById('output').textContent = userInput;
+}
+
+function createLink() {
+  const url = document.getElementById('url-input').value;
+  const element = document.createElement('a');
+  element.setAttribute('href', url);
+  element.textContent = 'Click me';
+  document.body.appendChild(element);
+}
+
+function loadScript() {
+  const scriptUrl = getParameterByName('src');
+  const script = document.createElement('script');
+  
+// SECURITY FIX: Added script source validation
+(() => {
+  const trustedDomains = [
+    'cdn.trusted-site.com',
+    'code.jquery.com',
+    'cdn.jsdelivr.net',
+    'cdnjs.cloudflare.com',
+    'unpkg.com'
+  ];
+  
+  // Validate the script source
+  const scriptSrc = scriptUrl;
+  let url;
+  
+  try {
+    url = new URL(scriptSrc, window.location.origin);
+  } catch (e) {
+    console.error("Invalid URL format");
+    return;
+  }
+  
+  if (trustedDomains.includes(url.hostname)) {
+    // Safe to use this domain
+    script.src = scriptSrc;
+  } else {
+    console.error("Untrusted script source domain: " + url.hostname);
+    // Either block the script or log a warning
+  }
+})();;
+  document.head.appendChild(script);
+}
+
+// Potentially vulnerable eval usage
+function calculateExpression() {
+  const expr = document.getElementById('expression').value;
+  const result = 
+// SECURITY NOTICE: eval should be avoided.
+// If you need to process data, use JSON.parse for JSON or 
+// other purpose-specific parsers for other formats.
+// If you need dynamic code execution, rethink your approach.
+console.warn("eval() replaced with safer alternative by XSS scanner");
+(() => {
+  const data = expr;
+  if (typeof data === 'string' && data.trim().startsWith('{') && data.trim().endsWith('}')) {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Could not parse as JSON:", e);
+    }
+  }
+  return data;
+})();
+  return result;

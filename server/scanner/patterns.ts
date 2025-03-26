@@ -514,6 +514,7 @@ function UserContent({ content }) {
   {
     type: "eval",
     regex: /eval\s*\(([^)]*)\)/g,
+    // Bu regex, zaten düzeltilmiş kodda bulunan "eval() replaced with safer alternative by XSS scanner" yorumunu tanımaz
     severity: "critical" as const,
     title: "Unsafe eval() Usage",
     description: "The use of eval() with user input creates a severe XSS vulnerability that allows arbitrary code execution.",
@@ -780,7 +781,7 @@ if (allowedActions.hasOwnProperty(actionName)) {
   },
   {
     type: "scriptSrc",
-    regex: /\.src\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
+    regex: /(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
