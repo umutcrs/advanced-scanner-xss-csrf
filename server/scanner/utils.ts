@@ -300,7 +300,7 @@ export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: n
     }
     
     // Process each identified variable
-    for (const varName of variables) {
+    Array.from(variables).forEach(varName => {
       // Look for variable declarations and value assignments in the context
       const declarationPatterns = [
         new RegExp(`(?:var|let|const)\\s+${varName}\\s*=`, 'g'),
@@ -389,7 +389,7 @@ export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: n
       if (!foundDeclaration) {
         dataFlowConfidence = Math.max(dataFlowConfidence, 0.3);
       }
-    }
+    });
     
     // Enhanced advanced heuristics for common code patterns
     
@@ -560,165 +560,348 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
   // Start with the base confidence for this vulnerability type
   let confidence = baseConfidence[vulnType] || 0.5;
   
-  // Extract a context around the match
-  const contextStart = Math.max(0, match.index - 300);
-  const contextEnd = Math.min(code.length, match.index + match[0].length + 300);
+  // Extract a larger context around the match for more accurate assessment
+  const contextStart = Math.max(0, match.index - 500); // Increased context size
+  const contextEnd = Math.min(code.length, match.index + match[0].length + 500);
   const context = code.substring(contextStart, contextEnd);
   
-  // Increase confidence if there's evidence of user input
+  // Enhanced user input detection with more patterns and better specificity
   const userInputPatterns = [
-    /user(?:Input|Data|Name|Content|Value|Id)/i,
-    /input(?:Value|Data|Field|Text)/i,
-    /value(?:From|Of|By)/i,
-    /param(?:eter|Value|String)/i,
-    /request\.(?:body|query|params)/i,
-    /form(?:Data|Value|Input)/i,
-    /\.(value|innerText|textContent)/,
-    /document\.getElementById\([^)]+\)\.value/,
-    /document\.querySelector\([^)]+\)\.value/,
-    /\$\([\s\S]*?\)\.val\(\)/,
-    /fetch\([\s\S]*?\)\.then/,
-    /\$\.(get|post|ajax)\(/,
-    /axios\.(get|post)\(/,
-    /XMLHttpRequest/,
-    /data(?:From|Value|Content)/i,
-    /localStorage\.getItem/,
-    /sessionStorage\.getItem/,
-    /\bURL\b.*\blocation\b/,
-    /\blocation\.(?:search|hash|href|pathname)/
+    // Common naming patterns for user input
+    /\b(?:user|client|visitor|customer|member|guest|person)(?:Input|Data|Name|Content|Value|Id|Profile|Info|Details)\b/i,
+    /\b(?:input|field|form|text|param|query|search|request|response|result|message)(?:Value|Data|Content|String|Text|Field|Json)\b/i,
+    
+    // DOM access patterns that typically retrieve user input
+    /(?:document|window|element)\b.*?(?:get|query|find).*?(?:Element|Selector|ById|ByName|ByTagName|All)/i,
+    /\.(?:value|innerText|textContent|innerHTML|textValue|val\(\)|text\(\)|html\(\))/i,
+    
+    // Form elements and data commonly associated with user input
+    /(?:input|select|textarea|option|button|checkbox|radio|form)\b.*?\.value/i,
+    /\bform(?:Data|Element|Group|Control|Builder|Value|Field|Collection|Items)\b/i,
+    
+    // Web API sources for user data
+    /(?:fetch|ajax|axios|http|get|post|request|XMLHttpRequest)\b.*?(?:\.then|\basync|\bawait)/i,
+    /(?:localStorage|sessionStorage|cookies|indexedDB)\b.*?(?:get|read|load|retrieve)/i,
+    /\b(?:URL|URI|location|history|navigation|router)\b.*?(?:search|query|params|hash|path|state)/i,
+    
+    // Event objects commonly containing user input
+    /\b(?:event|evt|e)\b.*?(?:target|currentTarget|srcElement|relatedTarget|data|detail)/i,
+    /\b(?:on|handle)(?:[A-Z]\w*)?(?:Change|Input|Submit|Click|Key|Focus|Blur|Selection|Drag)/i,
+    
+    // React/framework state patterns
+    /\bthis\.(?:state|props)\b(?!\.(children|className|style|key|ref))/i,
+    /\buse(?:State|Ref|Context|Effect|Redux|Form|Query|Params|Router|Navigation)\b/i,
+    /\b(?:v-model|@input|@change|ng-model|formControl|formGroup|\[(ngModel)\])\b/i,
+    
+    // File & upload handling
+    /\b(?:FileReader|File|Blob|FormData|upload|dataTransfer|files|multipart)\b/i,
+    
+    // Data processing often indicative of user input
+    /\b(?:parse|stringify|JSON|encode|decode|deserialize|serialize|transform|convert|format)\b.*?(?:\()/i,
+    /\b(?:split|join|replace|match|search|test|exec|trim)\b.*?(?:\()/i,
+    
+    // Storage mechanisms
+    /\b(?:getItem|setItem|removeItem|get|set|put|add|delete|query|load|save)\b.*?(?:\()/i,
+    
+    // Security-related function names that often process user input
+    /\b(?:sanitize|validate|escape|filter|verify|check|prevent|protect|secure)\b.*?(?:\()/i
   ];
   
+  // Detect if context contains evidence of user input
+  let userInputEvidenceFound = false;
+  let userInputEvidenceStrength = 0;
+  
+  // Check for increasingly specific evidence of user input
   for (const pattern of userInputPatterns) {
     if (pattern.test(context)) {
-      confidence += 0.15; // Higher increase for more specific evidence
-      break;
+      userInputEvidenceFound = true;
+      
+      // How much we increase confidence depends on how closely the pattern appears to the vulnerability
+      // Check proximity to the vulnerability point
+      const matchedPattern = context.match(pattern);
+      if (matchedPattern && matchedPattern.index !== undefined) {
+        const patternDistance = Math.abs((matchedPattern.index + contextStart) - match.index);
+        
+        // Closer matches are stronger evidence
+        if (patternDistance < 100) {
+          userInputEvidenceStrength = 0.25; // Very close - strong evidence
+        } else if (patternDistance < 250) {
+          userInputEvidenceStrength = 0.15; // Near - good evidence
+        } else {
+          userInputEvidenceStrength = 0.1; // Present but further away
+        }
+        
+        // Don't need to check more patterns once we have strong evidence
+        if (userInputEvidenceStrength >= 0.2) break;
+      }
     }
   }
   
-  // Decrease confidence if there appears to be sanitization or validation
+  // Apply user input evidence to confidence score
+  if (userInputEvidenceFound) {
+    confidence += userInputEvidenceStrength;
+  }
+  
+  // Enhanced sanitization detection with more robust patterns
   const sanitizationPatterns = [
-    /sanitize(?:Html|Input|Content|Value)/i,
-    /escape(?:Html|String|Content|Value)/i,
-    /encodeURI(?:Component)?/,
-    /DOMPurify\.sanitize/,
-    /\bfilter(?:Input|Content|Value|XSS)/i,
-    /validate(?:Input|Content|Value|Url)/i,
-    /purify(?:Html|Content|Input)/i,
-    /html(?:Entities|Escape)/i,
-    /is(?:Valid|Safe)(?:Input|Url|Content)/i,
-    /check(?:For|If)(?:XSS|Injection|Malicious)/i,
-    /remove(?:Dangerous|Unsafe|Malicious)/i,
-    /clean(?:Input|Data|Content|Html)/i,
-    /strip(?:Tags|Scripts|Unsafe)/i
+    // Standard security libraries and methods
+    /DOMPurify\.sanitize\s*\(/i,
+    /\bsanitize(?:HTML|Element|Node|Content|Input|Value|String|Text|User|Data)\s*\(/i,
+    /\bescape(?:HTML|String|Content|Value|Text|XML|User|Data)\s*\(/i,
+    
+    // Methods that convert to text nodes (safe)
+    /\bdocument\.createTextNode\s*\(/i,
+    /\.(textContent|innerText)\s*=(?!=)/i, // Assignments to text properties (but exclude equality checks)
+    
+    // HTML entity encoding
+    /\bhtml(?:Entities|Escape|Encoder|Sanitizer)\b/i,
+    /\.replace\s*\(\s*(?:\/?[<>"'&]|\/[<>"'&]\/g|\[[<>"'&]\])/i, // Replacing dangerous characters
+    
+    // Validation functions
+    /\bis(?:Valid|Safe)(?:HTML|Input|URL|Content|String|Value|Data)\s*\(/i,
+    /\bvalidate(?:HTML|Input|URL|Content|String|Value|Data)\s*\(/i,
+    
+    // Content Security Policy
+    /Content-Security-Policy/i,
+    /CSP|nonce|integrity/i,
+    
+    // Frameworks' built-in sanitization
+    /\bangular\b.*?(?:sanitize|bypassSecurityTrust)/i,
+    /\breact\b.*?(?:dangerouslySetInnerHTML)/i, // Looking for proper handling
+    /\bvue\b.*?(?:v-html)/i, // Looking for proper handling
+    
+    // Various security methods
+    /\b(?:filter|clean|scrub|purify|strip|remove)(?:HTML|Tags|Scripts|XSS|Unsafe|Dangerous)\s*\(/i,
+    /\bencodeURI(?:Component)?\s*\(/i,
+    
+    // Specific anti-XSS function names
+    /\bprevent(?:XSS|Injection|Attack|Malicious)\s*\(/i,
+    /\bsafe(?:HTML|Content|String|Markup|Node)\s*\(/i
   ];
+  
+  // Look for sanitization evidence and measure its strength
+  let sanitizationEvidenceStrength = 0;
   
   for (const pattern of sanitizationPatterns) {
     if (pattern.test(context)) {
-      confidence -= 0.25; // Higher decrease for clear evidence of sanitization
+      // Determine how reliable this sanitization evidence is
+      // Check if sanitization is applied directly to the variable we're concerned about
+      
+      // Extract potential variable names from the match
+      const matchText = match[0];
+      const variableMatches = matchText.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
+      
+      // For each variable in the match, see if it appears to be sanitized
+      for (const varName of variableMatches) {
+        // Skip common keywords and DOM objects
+        if (['if', 'else', 'for', 'while', 'var', 'let', 'const', 'function', 
+             'return', 'document', 'window', 'true', 'false', 'null', 'undefined'].includes(varName)) {
+          continue;
+        }
+        
+        // Look for the variable being sanitized
+        const sanitizationRegex = new RegExp(
+          '(?:' +
+            sanitizationPatterns.map(p => p.source).join('|') + 
+          ').*?\\b' + varName + '\\b|\\b' + varName + '\\b.*?(?:' + 
+            sanitizationPatterns.map(p => p.source).join('|') + 
+          ')', 
+          'i'
+        );
+        
+        if (sanitizationRegex.test(context)) {
+          // Strong evidence of sanitization applied to this specific variable
+          sanitizationEvidenceStrength = 0.4;
+          break;
+        }
+      }
+      
+      // If we didn't find specific variable sanitization but found general sanitization
+      if (sanitizationEvidenceStrength === 0) {
+        sanitizationEvidenceStrength = 0.25;
+      }
+      
       break;
     }
   }
   
-  // Adjust confidence based on context specific to vulnerability type
-  // For example, URL validations for URL-related vulnerabilities
-  if (/href|src|url|location/.test(vulnType.toLowerCase())) {
-    if (/https?:\/\/|isValidUrl|validateUrl|checkUrl/.test(context)) {
-      confidence -= 0.1;
-    }
+  // Apply sanitization evidence to confidence score
+  if (sanitizationEvidenceStrength > 0) {
+    confidence -= sanitizationEvidenceStrength;
   }
   
-  // For DOM manipulation vulnerabilities, check for DOM safety patterns
-  if (/innerHTML|outerHTML|dangerouslySetInnerHTML|document\.write/.test(vulnType)) {
-    if (/createTextNode|textContent|innerText/.test(context)) {
-      confidence -= 0.1;
-    }
-  }
+  // Enhanced context-specific adjustments based on vulnerability type
   
-  // Higher confidence if we see dangerous patterns nearby
-  const dangerousPatterns = [
-    /['"]\s*\+\s*(?:user|input|value|param)/i,  // String concatenation with user input
-    /\${(?:[^{}]*?)(?:user|input|value|param)}/i, // Template literal with user input
-    /(?:user|input|value|param)(?:[^;{]*?)['"]/i, // User input used in a string
-    /JSON\.parse\((?:[^;]*?)(?:user|input|value|param)/i, // JSON.parse with user input
-    /new\s+Function\((?:[^)]*?)(?:user|input|value|param)/i // Function constructor with user input
-  ];
-  
-  // Patterns that indicate proper sanitization is being used - reduce false positives
-  const sanitizationContextPatterns = [
-    /document\.createTextNode\([^)]*\)\.textContent/i, // Using textContent of TextNode to sanitize
-    /DOMPurify\.sanitize/i,                            // Using DOMPurify
-    /\.replace\s*\([^)]*\)/i,                         // Using string replace
-    /sanitize(?:d|r)?(?:[A-Z]|_)/i,                   // Something explicitly named as "sanitized"
-    /\.encodeURI(?:Component)?\s*\(/i,                // URL encoding functions
-    /\bvalid(?:ate|ation)/i                           // Validation mentions
-  ];
-  
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(context)) {
-      confidence += 0.1;
-      break;
-    }
-  }
-  
-  // Reduce confidence if we see evidence of proper sanitization
-  for (const pattern of sanitizationContextPatterns) {
-    if (pattern.test(context)) {
-      confidence -= 0.3; // Significantly reduce confidence if sanitization is detected
-      break;
-    }
-  }
-  
-  // Additional context checking for specific elements
-  // Special handling for any element.src assignment
-  if (/\.src\s*=/.test(match[0])) {
-    // Check if it specifically mentions HTML sanitization with textContent
-    if (/document\.createTextNode\([^)]*\)\.textContent/.test(context)) {
-      confidence -= 0.6; // This is a strong sanitization approach
-    }
-
-    // Check element type - scripts are dangerous, images are safer
-    if (/script|javascript/i.test(context) && /\.src\s*=/.test(match[0])) {
-      // It appears to be a script src assignment, maintain high confidence
-      confidence += 0.2;
-    } else if (/\b(?:img|image|picture|avatar|photo|uploaded(?:Image|Picture|File))\b/i.test(context) && /\.src\s*=/.test(match[0])) {
-      // Specifically detect image elements by common naming patterns
-      confidence -= 0.4;
+  // URL and src related vulnerabilities
+  if (/(?:href|src|url|location|href|uri|path)/i.test(vulnType)) {
+    // Check for URL validation/sanitization
+    if (/(?:isValid|validate|check|sanitize|escape|encode)(?:URL|Uri|Href|Link|Path)/i.test(context)) {
+      confidence -= 0.2;
     }
     
-    // Additional check for element types
-    if (vulnType === "imageSrcAssignment") {
-      confidence -= 0.3; // Reduce confidence for image elements
-    } else if (vulnType === "scriptSrcAssignment") {
-      confidence += 0.2; // Increase confidence for script elements
+    // Static URLs are less risky
+    if (/(['"])(?:https?:)?\/\/[a-z0-9][-a-z0-9.]*\1/.test(context)) {
+      confidence -= 0.15;
+    }
+    
+    // Check if it's a resource URL with no user input
+    if (/\.(?:src|href)\s*=\s*['"](?:https?:)?\/\//.test(context) && !userInputEvidenceFound) {
+      confidence -= 0.2;
     }
   }
   
-  // Decrease confidence for very small matches that might be false positives
-  if (match[0].length < 5) {
-    confidence -= 0.15;
+  // DOM manipulation vulnerabilities
+  if (/(?:innerHTML|outerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write)/i.test(vulnType)) {
+    // Check for safer alternatives
+    if (/(?:textContent|innerText|createTextNode)/i.test(context)) {
+      confidence -= 0.2;
+    }
+    
+    // Detect template literals that might be dangerous
+    if (/`[^`]*\${[^}]*}/i.test(context)) {
+      confidence += 0.15;
+    }
+    
+    // String concatenation with variables is risky
+    if (/['"][^'"]*?\+\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*(\+\s*['"][^'"]*?)?/i.test(context)) {
+      confidence += 0.15;
+    }
   }
   
-  // Decrease confidence for matches that appear in test/mock code
-  if (/test|spec|mock|stub|fake|dummy|example/.test(context.toLowerCase())) {
-    confidence -= 0.2;
-  }
-  
-  // Decrease even more if it's in a comment or string literal
-  if (isMostLikelyComment(code, match.index)) {
-    confidence -= 0.6; // Almost certainly a false positive
-  } else if (code.substring(Math.max(0, match.index - 200), match.index).includes("'") || 
-             code.substring(Math.max(0, match.index - 200), match.index).includes('"') ||
-             code.substring(Math.max(0, match.index - 200), match.index).includes('`')) {
-    // Simple check if we're potentially inside a string
-    confidence -= 0.3; // Likely a false positive, but could be building a string for eval
-  }
-  
-  // Check execution context for certain vulnerability types that are context-sensitive
-  if (["eval", "Function", "setTimeout", "setInterval"].includes(vulnType)) {
-    // Higher confidence if these are used in event handlers or dynamic code generation
-    if (/onclick|addEventListener|event|handler|dynamic|generate/.test(context)) {
+  // Code execution vulnerabilities
+  if (/(?:eval|Function|setTimeout|setInterval|execScript)/i.test(vulnType)) {
+    // These are already high confidence, but look for specific patterns
+    
+    // Dynamic code generation
+    if (/(?:generate|build|construct|compile|create|assemble)(?:Code|Script|Function|Snippet|Expression)/i.test(context)) {
       confidence += 0.1;
     }
+    
+    // Passing strings from user input
+    if (/['"`]\s*\+\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\+\s*['"`]/i.test(context)) {
+      confidence += 0.1;
+    }
+    
+    // Lower confidence if it's using a strict CSP header or nonce
+    if (/Content-Security-Policy.*?\bnonce-|script-src\s+'nonce-/i.test(context)) {
+      confidence -= 0.2;
+    }
+  }
+  
+  // Enhanced dangerous pattern detection
+  const dangerousPatterns = [
+    // String concatenation with potential user input
+    /(['"`])[^'"`]*?\1\s*\+\s*(?!['"`])[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*\s*(?:\+\s*\1[^'"`]*?\1)?/i,
+    
+    // Template literals with expressions
+    /`[^`]*?\${(?:[^{}]*?)[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*}[^`]*?`/i,
+    
+    // Dangerous method calls with potential user data
+    /(?:eval|Function|setTimeout|setInterval|document\.write)\s*\(\s*(?!['"`])(?:[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*)/i,
+    
+    // Using user input in dangerous contexts
+    /\.(?:innerHTML|outerHTML|insertAdjacentHTML)\s*=\s*(?!['"`])(?:[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*)/i,
+    
+    // iframe's contents or srcdoc with variables
+    /iframe[^>]*\b(?:src|srcdoc)\s*=\s*(?!['"`])(?:[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*)/i,
+    
+    // Dynamic script creation
+    /(?:create|append)(?:Child|Element)\s*\(\s*['"]script['"]/i,
+    
+    // JSON parsing of user input
+    /JSON\.parse\s*\(\s*(?!['"`])(?:[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*)/i,
+    
+    // DOM clobbering risks
+    /\bid['"]\s*[=:]\s*(?!['"`])(?:[a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(?:\[[^\]]+\])*)/i,
+    
+    // Callback functions potentially using user input
+    /(?:map|forEach|filter|reduce|flatMap|findIndex|find)\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/i
+  ];
+  
+  // Advanced sanitization patterns that indicate secure code
+  const advancedSanitizationPatterns = [
+    // Comprehensive sanitization approaches
+    /DOMPurify\.sanitize/i,
+    
+    // Strict Content Security Policy headers
+    /Content-Security-Policy/i,
+    
+    // Framework-specific sanitization
+    /angular\.sanitize/i,
+    /React\.createElement/i,
+    
+    // Encoding and multiple layers of sanitization
+    /encodeURIComponent/i,
+    
+    // Comprehensive character replacement
+    /\.replace/i,
+    
+    // Use of safe DOM methods
+    /createTextNode/i,
+    
+    // Structured sanitization with allowlists
+    /allowlist|whitelist/i
+  ];
+  
+  // Check for dangerous patterns
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(context)) {
+      confidence += 0.15;
+      break;
+    }
+  }
+  
+  // Check for advanced sanitization patterns
+  for (const pattern of advancedSanitizationPatterns) {
+    if (pattern.test(context)) {
+      confidence -= 0.35; // Significant decrease for strong sanitization evidence
+      break;
+    }
+  }
+  
+  // Special handling for specific element types
+  if (/\.(?:src|href)\s*=/.test(match[0])) {
+    // For script elements - higher risk
+    if (/script|javascript/i.test(context) && /\.src\s*=/.test(match[0])) {
+      confidence += 0.15;
+    } 
+    // For media elements - lower risk as they usually don't execute code
+    else if (/\b(?:img|image|picture|video|audio|media|avatar|photo)\b/i.test(context) && /\.src\s*=/.test(match[0])) {
+      confidence -= 0.25;
+    }
+    // For link elements - medium risk
+    else if (/\b(?:a|link|anchor)\b/i.test(context) && /\.href\s*=/.test(match[0])) {
+      confidence -= 0.1;
+    }
+  }
+  
+  // Context-aware checks for false positives
+  
+  // In comments
+  if (isInsideComment(code, match.index, match.index + match[0].length)) {
+    confidence -= 0.7; // Very likely a false positive
+  }
+  
+  // In string literals (unless used for dynamic evaluation)
+  else if (isInsideStringLiteral(code, match.index) && 
+      !["eval", "Function", "setTimeout", "setInterval"].includes(vulnType)) {
+    confidence -= 0.5; // Likely a false positive for non-eval contexts
+  }
+  
+  // In test/example code
+  if (/\b(?:test|spec|mock|stub|fake|dummy|example)\b/i.test(context) || 
+      /\bdescribe\s*\(|\bit\s*\(|\bexpect\s*\(|\bshould\b|\bassert\b/i.test(context)) {
+    confidence -= 0.3; // Likely in test code
+  }
+  
+  // In commented-out code
+  if (/\/\/.*?\b(TODO|FIXME|NOTE|XXX|HACK)\b/i.test(context.substring(0, context.indexOf('\n') > -1 ? context.indexOf('\n') : context.length))) {
+    confidence -= 0.2; // Might be commented-out code that isn't active
+  }
+  
+  // Check file type (if available from the context)
+  if (/\.(?:test|spec|example|mock|stub|sample)\.(?:js|ts|jsx|tsx)$/.test(context)) {
+    confidence -= 0.2; // In a test file
   }
   
   // Ensure confidence is between 0 and 1
