@@ -4,6 +4,12 @@ import { ScanPattern } from "../../shared/schema";
  * Advanced XSS and CSRF vulnerability patterns to check for in JavaScript code
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
+// ES/JS Modülleri için özel whitelist - kesinlikle güvenli kabul edilen ifadeler
+const moduleExportsWhitelist = `Object.defineProperty(exports, "__esModule", { value: true });
+Object.defineProperty(exports, "__esModule",{value:true});
+Object.defineProperty(exports,"__esModule",{value:true});
+Object.defineProperty(module.exports, "__esModule", { value: true });`;
+
 export const scanPatterns: ScanPattern[] = [
   // Prototype Pollution Detection - daha doğru tespit için spesifik prototype manipulasyonu desenine odaklan
   {
@@ -51,27 +57,7 @@ function safePropertyDefine(target, key, value) {
 }`
   },
 
-  // Static Object.defineProperty pattern (false positive prevention)
-  {
-    type: "staticDefineProperty",
-    regex: /Object\.defineProperty\s*\(\s*exports\s*,\s*['"]__esModule['"]\s*,\s*\{\s*value\s*:\s*true\s*\}\s*\)/gi,
-    skipPattern: /(?:)/i,
-    severity: "info" as const,
-    title: "Safe Object.defineProperty Usage in Module Exports",
-    description: "This is a common and safe pattern used for ES module exports, not a security issue.",
-    recommendation: "This is a safe pattern for module exports. No action needed.",
-    recommendationCode: `// This is a safe pattern used for ES module exports
-Object.defineProperty(exports, "__esModule", { value: true });
-
-// Example of the pattern in context:
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.myFunction = void 0;
-
-function myFunction() {
-  // Function implementation
-}
-exports.myFunction = myFunction;`
-  },
+  // NOT: Bu deseni siliyoruz, artık ana kod içinde erken filtre ile tamamen yok sayılıyor
   // Advanced DOM-based XSS Detection
   {
     type: "domBasedXSS",
