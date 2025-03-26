@@ -4668,6 +4668,54 @@ safeCrossDomainRequest('https://api.example.com/data', 'GET')
 // safeCrossDomainRequest('https://api.example.com/profile', 'GET', null, true)`
   },
 
+  // CSRF via HTML Forms without tokens
+  {
+    type: "formCSRFVulnerability",
+    regex: /form\.(?:submit|action\s*=\s*['"]https?:\/\/[^'"]*['"])[^;{}]*?\s*(?!(?:.*?csrf|.*?token|.*?nonce))/gi,
+    severity: "critical" as const,
+    title: "Form Submission Without CSRF Protection",
+    description: "This code creates and submits a form without a CSRF token, allowing attackers to forge requests on behalf of authenticated users.",
+    recommendation: "Always include CSRF tokens in forms and validate them on the server.",
+    recommendationCode: `// UNSAFE - Form without CSRF token:
+// const form = document.createElement('form');
+// form.method = 'POST';
+// form.action = '/api/update-profile';
+// form.submit();
+
+// SAFE - Include CSRF token in form:
+function createSecureForm(action, method) {
+  const form = document.createElement('form');
+  form.action = action;
+  form.method = method;
+  
+  // Get CSRF token from meta tag or cookie
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                   getCookie('XSRF-TOKEN');
+  
+  if (!csrfToken) {
+    console.error('Missing CSRF token - cannot create secure form');
+    return null;
+  }
+  
+  // Add CSRF token as hidden field
+  const tokenField = document.createElement('input');
+  tokenField.type = 'hidden';
+  tokenField.name = 'csrf_token';
+  tokenField.value = csrfToken;
+  form.appendChild(tokenField);
+  
+  return form;
+}
+
+// Usage:
+const secureForm = createSecureForm('/api/update-profile', 'POST');
+if (secureForm) {
+  // Add form fields...
+  document.body.appendChild(secureForm);
+  secureForm.submit();
+}`
+  },
+
   // Cookie without secure and HttpOnly flags
   {
     type: "insecureCookieSettings",

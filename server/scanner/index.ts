@@ -199,6 +199,23 @@ function prepareCodeForScanning(code: string): string {
   // Normalize input by removing Byte Order Mark (BOM) if present
   let preparedCode = code.replace(/^\uFEFF/, '');
   
+  // Extract JavaScript code from template literals for better CSRF detection
+  const templateStrings: string[] = [];
+  preparedCode = preparedCode.replace(/`([\s\S]*?)`/g, (match, content) => {
+    // Extract any JavaScript from HTML templates
+    const extractedJs = extractJsFromHtml(content);
+    if (extractedJs) {
+      templateStrings.push(extractedJs);
+    }
+    return match; // Keep the original template string
+  });
+  
+  // Add extracted JavaScript code to the end for scanning
+  if (templateStrings.length > 0) {
+    preparedCode += "\n// Extracted from template literals for scanning\n" + 
+                  templateStrings.join("\n");
+  }
+  
   // Replace minified semicolons with newlines to improve pattern matching
   preparedCode = preparedCode.replace(/;(?=\S)/g, ';\n');
   
@@ -226,6 +243,49 @@ function prepareCodeForScanning(code: string): string {
   preparedCode = preparedCode.replace(/([a-zA-Z0-9_$])\(/g, '$1 (');
   
   return preparedCode;
+}
+
+/**
+ * Extract JavaScript code from HTML string for better detection
+ * @param htmlContent The HTML string to process
+ * @returns Extracted JavaScript code
+ */
+function extractJsFromHtml(htmlContent: string): string {
+  let extractedJs = "";
+  
+  // Extract code from <script> tags
+  const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let scriptMatch;
+  
+  while ((scriptMatch = scriptRegex.exec(htmlContent)) !== null) {
+    extractedJs += scriptMatch[1] + "\n";
+  }
+  
+  // Extract fetch calls and form submissions
+  const fetchRegex = /fetch\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*\{([\s\S]*?)\}\s*\)/gi;
+  let fetchMatch;
+  
+  while ((fetchMatch = fetchRegex.exec(htmlContent)) !== null) {
+    extractedJs += `fetch('${fetchMatch[1]}', {${fetchMatch[2]}})\n`;
+  }
+  
+  // Extract form submissions
+  const formRegex = /form\.(?:submit|action\s*=\s*['"`][^'"`]*['"`])/gi;
+  let formMatch;
+  
+  while ((formMatch = formRegex.exec(htmlContent)) !== null) {
+    extractedJs += `${formMatch[0]};\n`;
+  }
+  
+  // Extract credentials property for CSRF detection
+  const credentialsRegex = /credentials\s*:\s*['"]include['"]/gi;
+  let credentialsMatch;
+  
+  while ((credentialsMatch = credentialsRegex.exec(htmlContent)) !== null) {
+    extractedJs += `const tempObj = { ${credentialsMatch[0]} };\n`;
+  }
+  
+  return extractedJs;
 }
 
 /**
