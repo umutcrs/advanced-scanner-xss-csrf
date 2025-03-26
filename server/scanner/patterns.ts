@@ -5,6 +5,71 @@ import { ScanPattern } from "../../shared/schema";
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns: ScanPattern[] = [
+  // Prototype Pollution Detection
+  {
+    type: "prototypeManipulation",
+    regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|prototype)/gi,
+    skipPattern: /(?:)/i,
+    severity: "high" as const,
+    title: "Prototype Pollution Vulnerability",
+    description: "This code directly modifies object prototypes which can lead to prototype pollution attacks if input is not properly validated.",
+    recommendation: "Avoid modifying Object.prototype or using __proto__. Use Object.create(null) for safer objects without prototypes.",
+    recommendationCode: `// UNSAFE:
+// function processUserInput(obj) {
+//   Object.defineProperty(Object.prototype, obj.key, {
+//     value: obj.value,
+//     enumerable: true
+//   });
+// }
+
+// SAFE:
+function processUserInput(obj) {
+  // Use a Map instead of modifying Object.prototype
+  const safeMap = new Map();
+  safeMap.set(obj.key, obj.value);
+  
+  // Or use safe objects without prototypes
+  const safeObj = Object.create(null);
+  safeObj[obj.key] = obj.value;
+  
+  return { safeMap, safeObj };
+}
+
+// When using Object.defineProperty, always use specific object targets
+function safePropertyDefine(target, key, value) {
+  // Only allow specific whitelisted targets
+  const allowedTargets = [myObj, myComponent, myService];
+  
+  if (allowedTargets.includes(target)) {
+    Object.defineProperty(target, key, {
+      value: value,
+      enumerable: true
+    });
+  }
+}`
+  },
+
+  // Static Object.defineProperty pattern (false positive prevention)
+  {
+    type: "staticDefineProperty",
+    regex: /Object\.defineProperty\s*\(\s*exports\s*,\s*['"]__esModule['"]\s*,\s*\{\s*value\s*:\s*true\s*\}\s*\)/gi,
+    skipPattern: /(?:)/i,
+    severity: "info" as const,
+    title: "Safe Object.defineProperty Usage in Module Exports",
+    description: "This is a common and safe pattern used for ES module exports, not a security issue.",
+    recommendation: "This is a safe pattern for module exports. No action needed.",
+    recommendationCode: `// This is a safe pattern used for ES module exports
+Object.defineProperty(exports, "__esModule", { value: true });
+
+// Example of the pattern in context:
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.myFunction = void 0;
+
+function myFunction() {
+  // Function implementation
+}
+exports.myFunction = myFunction;`
+  },
   // Advanced DOM-based XSS Detection
   {
     type: "domBasedXSS",
