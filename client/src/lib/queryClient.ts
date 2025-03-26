@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { CodeFixRequest, CodeFixResponse } from "@shared/schema";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -21,6 +22,14 @@ export async function apiRequest(
 
   await throwIfResNotOk(res);
   return res;
+}
+
+/**
+ * API request to fix vulnerable code
+ */
+export async function fixVulnerableCode(request: CodeFixRequest): Promise<CodeFixResponse> {
+  const response = await apiRequest("POST", "/api/fix", request);
+  return await response.json();
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
