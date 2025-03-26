@@ -1,8 +1,10 @@
+import { ScanPattern } from "../../shared/schema";
+
 /**
  * Advanced XSS and CSRF vulnerability patterns to check for in JavaScript code
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
-export const scanPatterns = [
+export const scanPatterns: ScanPattern[] = [
   // Template Literal Injection with unescaped parameters
   {
     type: "templateLiteralInjection",
@@ -4672,6 +4674,7 @@ safeCrossDomainRequest('https://api.example.com/data', 'GET')
   {
     type: "formCSRFVulnerability",
     regex: /form\.(?:submit|action\s*=\s*['"]https?:\/\/[^'"]*['"])[^;{}]*?\s*(?!(?:.*?csrf|.*?token|.*?nonce))/gi,
+    skipPattern: /tokenField\.name\s*=\s*['"]csrf_token['"]/i, // Skip detection if CSRF token is added
     severity: "critical" as const,
     title: "Form Submission Without CSRF Protection",
     description: "This code creates and submits a form without a CSRF token, allowing attackers to forge requests on behalf of authenticated users.",

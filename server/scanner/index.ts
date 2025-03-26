@@ -1,5 +1,5 @@
 import { scanPatterns } from "./patterns";
-import { ScanResult, Vulnerability } from "@shared/schema";
+import { ScanResult, Vulnerability, ScanPattern } from "@shared/schema";
 import { 
   extractCodeSnippet, 
   countPatternMatches, 
@@ -32,7 +32,7 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     index: number;
     length: number;
     type: string;
-    pattern: typeof scanPatterns[0];
+    pattern: ScanPattern;
     match: RegExpExecArray;
   }> = [];
   

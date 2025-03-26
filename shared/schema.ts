@@ -16,6 +16,20 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// Scan pattern type
+export const scanPatternSchema = z.object({
+  type: z.string(),
+  regex: z.instanceof(RegExp),
+  severity: z.enum(["critical", "high", "medium", "low", "info"]),
+  title: z.string(),
+  description: z.string(),
+  recommendation: z.string(),
+  recommendationCode: z.string(),
+  skipPattern: z.instanceof(RegExp).optional(),
+});
+
+export type ScanPattern = z.infer<typeof scanPatternSchema>;
+
 // Schema for XSS vulnerability scan results
 export const vulnerabilitySchema = z.object({
   id: z.string(),
