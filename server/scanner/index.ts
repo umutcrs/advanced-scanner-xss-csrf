@@ -179,22 +179,24 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         continue;
       }
       
-      // Object.defineProperty kullanımlarını daha güvenli bir şekilde analiz et
-      if (codeSnippet.includes("Object.defineProperty")) {
-        // Eğer exports veya module.exports ile ilgili bir kullanım varsa veya prototip manipülasyonu yoksa
-        // kesin olarak bu güvenli bir kullanımdır
-        if (!codeSnippet.includes("prototype") || 
-            !codeSnippet.includes("__proto__") || 
-            !codeSnippet.match(/Object\.prototype|constructor\.prototype/i)) {
-            continue;
-        }
-        // Eğer constructor veya prototype kullanımı var ama ES6/CommonJS modül yapısının parçasıysa
-        // bu da güvenlidir
-        if (codeSnippet.includes("exports") || 
-            codeSnippet.includes("module.exports") || 
-            codeSnippet.includes("__esModule")) {
-            continue;
-        }
+      // Object.defineProperty ve diğer prototip manipülasyonları için özel filtre
+      // Modül dışa aktarımlarıyla ilgili tüm Object.defineProperty kullanımlarını tamamen güvenli kabul et
+      if (codeSnippet.includes("Object.defineProperty") && codeSnippet.includes("exports")) {
+        continue; // Kesinlikle güvenli - exports ile kullanılan tüm Object.defineProperty çağrıları
+      }
+      
+      // ES Modül yapısını algıla ve güvenli işaretlie
+      if (codeSnippet.includes("Object.defineProperty") && codeSnippet.includes("__esModule")) {
+        continue; // Kesinlikle güvenli - __esModule ile kullanılan tüm Object.defineProperty çağrıları
+      }
+      
+      // Sadece gerçek prototip manipülasyonlarını tehlikeli olarak değerlendir
+      if (codeSnippet.includes("Object.defineProperty") && 
+          !(codeSnippet.includes("Object.prototype") || 
+            codeSnippet.includes("__proto__") || 
+            codeSnippet.includes("prototype.") || 
+            codeSnippet.match(/constructor\.prototype/i))) {
+        continue; // Tehlikeli prototip manipülasyonu değil, güvenli kabul et
       }
     }
     

@@ -482,6 +482,13 @@ function findContextStart(code: string, index: number, maxLookback: number): num
  * @returns A confidence score between 0 and 1
  */
 export function calculateConfidenceScore(code: string, match: RegExpExecArray, vulnType: string): number {
+  // Object.defineProperty ES modül işlevleriyle ilgili tüm çağrıları otomatik olarak güvenli kabul et
+  if (vulnType === "prototypeManipulation" && 
+      match[0].includes("Object.defineProperty") &&
+      (match[0].includes("exports") || 
+       code.substring(Math.max(0, match.index - 50), Math.min(code.length, match.index + match[0].length + 50)).includes("__esModule"))) {
+    return 0; // Modül yükleyici tarafından oluşturulan kod - kesinlikle false positive
+  }
   // Base confidence by vulnerability type - optimized for better true/false positive ratio
   const baseConfidence: Record<string, number> = {
     // Critical severity - highest confidence
@@ -500,7 +507,7 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "dynamicScriptInjection": 0.95,
     "angularTemplateInjection": 0.90,
     "prototypeExpando": 0.90,
-    "prototypeManipulation": 0.60, // Düşük confidence ile false positive'leri azalt
+    "prototypeManipulation": 0.10, // Çok düşük confidence değeri ile false positive'leri tamamen önle
     "sanitizationBypass": 0.95, // New pattern - high confidence
     
     // CSRF-specific patterns - critical severity
