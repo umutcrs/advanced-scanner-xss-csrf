@@ -1,5 +1,5 @@
 /**
- * Advanced XSS vulnerability patterns to check for in JavaScript code
+ * Advanced XSS and CSRF vulnerability patterns to check for in JavaScript code
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns = [
@@ -4424,5 +4424,260 @@ function renderSafeSvg(svgContent, targetElement) {
   targetElement.innerHTML = '';
   targetElement.appendChild(img);
 }`
+  },
+
+  // CSRF Protection Vulnerabilities
+
+  // Missing CSRF token validation in form submissions
+  {
+    type: "missingCSRFToken",
+    regex: /(?:fetch|XMLHttpRequest|ajax|axios\.(?:post|put|delete|patch)|new\s+FormData\([^)]*\))[^;{]*(?!(?:csrf|xsrf|token|nonce)).*?(?:method\s*:\s*['"](?:POST|PUT|DELETE|PATCH)['"])/gi,
+    severity: "critical" as const,
+    title: "Missing CSRF Token in Form Submission",
+    description: "This code makes a state-changing request without including a CSRF token, which could allow attackers to forge requests on behalf of authenticated users.",
+    recommendation: "Include CSRF tokens in all state-changing requests (POST, PUT, DELETE, PATCH) and validate them on the server.",
+    recommendationCode: `// UNSAFE - No CSRF protection:
+// fetch('/api/update-profile', {
+//   method: 'POST',
+//   body: JSON.stringify(userData)
+// });
+
+// SAFE - Include CSRF token in headers:
+function safePostRequest(url, data) {
+  // Get CSRF token from meta tag or cookie
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('XSRF-TOKEN');
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken  // Add CSRF token header
+    },
+    body: JSON.stringify(data)
+  });
+}
+
+// Using with Axios
+axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');`
+  },
+
+  // Form submission without SameSite cookie attribute check
+  {
+    type: "sameSiteCookieVulnerability",
+    regex: /document\.forms\[.*?\]\.submit\(\)|(?:form|['"`]form['"`])\.submit\(\)/gi,
+    severity: "high" as const,
+    title: "Form Submission Without SameSite Protection",
+    description: "Form submission without checking for SameSite cookie protection may be vulnerable to CSRF attacks, especially in older browsers that don't enforce SameSite by default.",
+    recommendation: "Ensure cookies use SameSite=Lax or SameSite=Strict attribute and include CSRF tokens in forms.",
+    recommendationCode: `// SAFER - Add CSRF token to form:
+function addCSRFTokenToForm(form) {
+  // Get token from cookies or meta tag
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('CSRF-TOKEN');
+  
+  // Create hidden input with token
+  const hiddenInput = document.createElement('input');
+  hiddenInput.type = 'hidden';
+  hiddenInput.name = 'csrf_token';
+  hiddenInput.value = token;
+  
+  // Add to form before submission
+  form.appendChild(hiddenInput);
+  
+  return form;
+}
+
+// Usage:
+const form = document.getElementById('user-form');
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+  addCSRFTokenToForm(this);
+  this.submit();
+});`
+  },
+
+  // Click-jacking vulnerability (missing frame protection)
+  {
+    type: "clickjackingVulnerability",
+    regex: /window\.top\s*===\s*window\.self|if\s*\(\s*window\.self\s*==\s*window\.top\s*\)/gi,
+    severity: "medium" as const,
+    title: "Insufficient Clickjacking Protection",
+    description: "Manual frame-busting code is often insufficient to prevent clickjacking. This implementation may be bypassed, allowing your site to be framed by attackers.",
+    recommendation: "Use proper X-Frame-Options headers or CSP frame-ancestors directive instead of relying on JavaScript frame-busting code.",
+    recommendationCode: `// INSUFFICIENT - JavaScript-only approach:
+// if (window.self !== window.top) {
+//   window.top.location = window.self.location;
+// }
+
+// BETTER - Server-side solution:
+// Set HTTP headers in your server code:
+// 
+// X-Frame-Options: DENY
+// or
+// Content-Security-Policy: frame-ancestors 'none'
+// 
+// For specific allowed domains:
+// X-Frame-Options: ALLOW-FROM https://trusted-site.com
+// or
+// Content-Security-Policy: frame-ancestors 'self' https://trusted-site.com
+//
+// Note: JavaScript code can still be used as a fallback but should not be the primary protection
+
+// Client-side fallback (in addition to headers):
+function preventClickjacking() {
+  if (window.self !== window.top) {
+    // Attempt to break out of frames
+    window.top.location = window.self.location;
+    
+    // If breaking out fails (due to sandbox), make content unusable
+    document.body.textContent = 'This site cannot be displayed in a frame.';
+    document.body.style.display = 'block';
+    document.body.style.backgroundColor = '#f8d7da';
+    document.body.style.padding = '20px';
+  }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', preventClickjacking);`
+  },
+
+  // Cross-origin postMessage without origin check
+  {
+    type: "postMessageOriginVulnerability",
+    regex: /window\.addEventListener\s*\(\s*['"](message)['"]\s*,\s*(?!.*?(?:origin|source|targetOrigin))/gi,
+    severity: "high" as const,
+    title: "Insecure Cross-Origin Message Handling",
+    description: "This code accepts postMessage events without verifying the origin, which could allow attackers to inject data from malicious websites.",
+    recommendation: "Always validate the origin of incoming messages before processing them.",
+    recommendationCode: `// UNSAFE:
+// window.addEventListener('message', function(event) {
+//   const data = event.data;
+//   // Process data without origin check...
+// });
+
+// SAFE:
+window.addEventListener('message', function(event) {
+  // Always verify the origin of incoming messages
+  const trustedOrigins = ['https://trusted-site.com', 'https://api.your-app.com'];
+  
+  if (!trustedOrigins.includes(event.origin)) {
+    console.error('Message received from untrusted origin:', event.origin);
+    return;
+  }
+  
+  // It's safe to process the message now
+  try {
+    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    
+    // Process data...
+    
+  } catch (error) {
+    console.error('Error processing message:', error);
+  }
+});
+
+// When sending messages, always specify target origin:
+targetWindow.postMessage(data, 'https://specific-target.com');  // Never use '*'`
+  },
+
+  // Cross-domain AJAX without proper CORS checks
+  {
+    type: "crossDomainAjaxVulnerability",
+    regex: /\.open\s*\(\s*['"`](?:GET|POST|PUT|DELETE|PATCH)['"`]\s*,\s*['"`]https?:\/\/(?!(?:localhost|127\.0\.0\.1))[^'"`]*['"`]/gi,
+    severity: "medium" as const,
+    title: "Cross-Domain AJAX Without CORS Validation",
+    description: "This code attempts cross-domain AJAX requests without proper CORS validation, which may expose sensitive information or enable CSRF attacks.",
+    recommendation: "Implement proper CORS validation and use withCredentials appropriately.",
+    recommendationCode: `// SAFER cross-domain AJAX requests:
+function safeCrossDomainRequest(url, method, data, includeCredentials = false) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    // Set up proper event handlers
+    xhr.onload = function() {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.response);
+      } else {
+        reject(new Error('Request failed: ' + xhr.statusText));
+      }
+    };
+    
+    xhr.onerror = function() {
+      reject(new Error('Network error occurred'));
+    };
+    
+    // Open the request
+    xhr.open(method, url, true);
+    
+    // Only send credentials if explicitly needed
+    xhr.withCredentials = includeCredentials;
+    
+    // Set content type for POST/PUT requests
+    if (method === 'POST' || method === 'PUT') {
+      xhr.setRequestHeader('Content-Type', 'application/json');
+    }
+    
+    // Send the request
+    xhr.send(data ? JSON.stringify(data) : null);
+  });
+}
+
+// Usage example - without credentials (default):
+safeCrossDomainRequest('https://api.example.com/data', 'GET')
+  .then(response => console.log(response))
+  .catch(error => console.error(error));
+
+// With credentials (only when needed and when the server supports it):
+// safeCrossDomainRequest('https://api.example.com/profile', 'GET', null, true)`
+  },
+
+  // Cookie without secure and HttpOnly flags
+  {
+    type: "insecureCookieSettings",
+    regex: /document\.cookie\s*=\s*(?!(?:.*?secure|.*?httpOnly))[^;]*;/gi,
+    severity: "high" as const,
+    title: "Insecure Cookie Settings",
+    description: "This code sets cookies without the Secure and HttpOnly flags, making them vulnerable to theft via XSS attacks and man-in-the-middle attacks.",
+    recommendation: "Always set Secure and HttpOnly flags for cookies containing sensitive information.",
+    recommendationCode: `// UNSAFE:
+// document.cookie = "sessionId=abc123; path=/";
+
+// SAFE:
+// Secure cookie example (shown in comments to avoid execution issues)
+/*
+function setSecureCookie(name, value, options = {}) {
+  // Default options - secure by default
+  const defaultOptions = {
+    path: '/',
+    secure: true,         // Only sent over HTTPS
+    sameSite: 'strict',   // Protects against CSRF
+    maxAge: 3600          // 1 hour in seconds
+  };
+  
+  const cookieOptions = {...defaultOptions, ...options};
+  
+  // Build cookie string
+  let cookieString = encodeURIComponent(name) + "=" + encodeURIComponent(value);
+  
+  // Add options
+  if (cookieOptions.path) cookieString += "; path=" + cookieOptions.path;
+  if (cookieOptions.domain) cookieString += "; domain=" + cookieOptions.domain;
+  if (cookieOptions.maxAge) cookieString += "; max-age=" + cookieOptions.maxAge;
+  if (cookieOptions.expires) cookieString += "; expires=" + cookieOptions.expires.toUTCString();
+  if (cookieOptions.secure) cookieString += "; secure";
+  if (cookieOptions.sameSite) cookieString += "; samesite=" + cookieOptions.sameSite;
+  
+  // Set the cookie
+  document.cookie = cookieString;
+}
+
+// Usage:
+setSecureCookie('sessionId', 'abc123', {
+  secure: true,
+  sameSite: 'strict'
+});
+
+// NOTE: For sensitive cookies like session IDs, they should be set server-side
+// with the HttpOnly flag, which prevents JavaScript access
+*/`
   }
 ];

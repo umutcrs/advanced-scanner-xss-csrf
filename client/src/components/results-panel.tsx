@@ -115,7 +115,7 @@ export default function ResultsPanel({ results, isScanning, originalCode }: Resu
   
   // Generate a list of unique vulnerability types for filter dropdown
   const uniqueTypes = results?.vulnerabilities 
-    ? [...new Set(results.vulnerabilities.map(v => v.type))]
+    ? Array.from(new Set(results.vulnerabilities.map(v => v.type)))
     : [];
     
   // Export results as JSON
@@ -226,7 +226,7 @@ export default function ResultsPanel({ results, isScanning, originalCode }: Resu
       {isScanning && (
         <div className="p-12 text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-accent mb-4"></div>
-          <p className="text-gray-600">Scanning for XSS vulnerabilities...</p>
+          <p className="text-gray-600">Scanning for XSS and CSRF vulnerabilities...</p>
         </div>
       )}
 
@@ -341,7 +341,7 @@ export default function ResultsPanel({ results, isScanning, originalCode }: Resu
             <div className="p-12 text-center">
               <Shield className="mx-auto h-12 w-12 text-green-500" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No vulnerabilities found</h3>
-              <p className="mt-1 text-sm text-gray-500">Your code looks clean and doesn't contain common XSS vulnerabilities.</p>
+              <p className="mt-1 text-sm text-gray-500">Your code looks clean and doesn't contain common XSS or CSRF vulnerabilities.</p>
             </div>
           )}
         </div>
@@ -354,7 +354,7 @@ export default function ResultsPanel({ results, isScanning, originalCode }: Resu
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No scan results yet</h3>
-          <p className="mt-1 text-sm text-gray-500">Paste or upload JavaScript code and click "Scan" to detect XSS vulnerabilities.</p>
+          <p className="mt-1 text-sm text-gray-500">Paste or upload JavaScript code and click "Scan" to detect XSS and CSRF vulnerabilities.</p>
         </div>
       )}
     </div>
