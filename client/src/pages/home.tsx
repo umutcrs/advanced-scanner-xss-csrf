@@ -37,21 +37,7 @@ export default function Home() {
     scanMutation.mutate({ code, fileName });
   };
   
-  const handleCodeFixed = (fixedCode: string) => {
-    // Update the current code to the fixed version
-    setCurrentCode(fixedCode);
-    
-    // Show notification
-    toast({
-      title: "Kod güncellendi",
-      description: "Güvenlik açıklarının düzeltildiği kod editöre yüklendi. Yeni bir tarama yapmak için 'Tara' butonuna tıklayabilirsiniz.",
-      variant: "default",
-    });
-    
-    // Optionally, you can trigger a new scan with the fixed code
-    // setIsScanning(true);
-    // scanMutation.mutate({ code: fixedCode });
-  };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -88,7 +74,6 @@ export default function Home() {
             results={scanResults} 
             isScanning={isScanning} 
             originalCode={currentCode}
-            onCodeFixed={handleCodeFixed}
           />
         </div>
       </main>

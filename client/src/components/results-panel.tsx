@@ -1,88 +1,14 @@
-import { ScanResult, CodeFixRequest } from "@shared/schema";
+import { ScanResult } from "@shared/schema";
 import VulnerabilityCard from "./vulnerability-card";
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { CheckCircle, Loader } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { fixVulnerableCode } from "@/lib/queryClient";
+import { useState } from "react";
 
 interface ResultsPanelProps {
   results: ScanResult | null;
   isScanning: boolean;
   originalCode: string;
-  onCodeFixed: (fixedCode: string) => void;
 }
 
-export default function ResultsPanel({ results, isScanning, originalCode, onCodeFixed }: ResultsPanelProps) {
-  const [isFixingAll, setIsFixingAll] = useState(false);
-  const [fixedAll, setFixedAll] = useState(false);
-  const { toast } = useToast();
-  
-  // Reset fixedAll when new scan results arrive
-  useEffect(() => {
-    if (results) {
-      setFixedAll(false);
-    }
-  }, [results]);
-  
-  // Function to fix all vulnerabilities at once
-  const handleFixAll = async () => {
-    if (!results || results.vulnerabilities.length === 0 || isFixingAll || fixedAll) {
-      return;
-    }
-    
-    setIsFixingAll(true);
-    let currentCode = originalCode;
-    
-    try {
-      // Get all auto-fixable vulnerabilities
-      const autoFixableVulns = results.vulnerabilities.filter(v => v.autoFixable);
-      
-      if (autoFixableVulns.length === 0) {
-        toast({
-          title: "Hiçbir düzeltilebilir açık bulunamadı",
-          description: "Otomatik düzeltilebilecek güvenlik açığı bulunmamaktadır.",
-          variant: "destructive",
-        });
-        setIsFixingAll(false);
-        return;
-      }
-      
-      // Fix each vulnerability one by one, updating the code after each fix
-      for (const vuln of autoFixableVulns) {
-        const result = await fixVulnerableCode({
-          vulnerabilityId: vuln.id,
-          originalCode: currentCode,
-          vulnerabilityType: vuln.type,
-          line: vuln.line,
-          column: vuln.column
-        });
-        
-        if (result.success) {
-          // Update the current code for the next fix
-          currentCode = result.fixedCode;
-        }
-      }
-      
-      // Update the UI with the fully fixed code
-      onCodeFixed(currentCode);
-      setFixedAll(true);
-      
-      toast({
-        title: "Tüm güvenlik açıkları düzeltildi",
-        description: `${autoFixableVulns.length} güvenlik açığı başarıyla düzeltildi.`,
-        variant: "default",
-      });
-    } catch (error) {
-      toast({
-        title: "Düzeltme işlemi başarısız",
-        description: (error as Error).message || "Kod düzeltilirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFixingAll(false);
-    }
-  };
+export default function ResultsPanel({ results, isScanning, originalCode }: ResultsPanelProps) {
   
   // Helper function to get the background color based on severity
   const getSeverityBgColor = (severity: string) => {
@@ -186,34 +112,6 @@ export default function ResultsPanel({ results, isScanning, originalCode, onCode
             <div className="p-4">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="text-base font-medium text-gray-900">Vulnerability Details</h4>
-                
-                {/* Fix All button */}
-                {results.vulnerabilities.some(v => v.autoFixable) && (
-                  <Button 
-                    variant="default" 
-                    size="sm" 
-                    className="bg-accent hover:bg-accent-dark text-white"
-                    onClick={handleFixAll}
-                    disabled={isFixingAll || fixedAll}
-                  >
-                    {isFixingAll ? (
-                      <>
-                        <Loader className="h-4 w-4 mr-2 animate-spin" />
-                        <span>Tüm Açıklar Düzeltiliyor...</span>
-                      </>
-                    ) : fixedAll ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        <span>Tüm Açıklar Düzeltildi</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        <span>Tüm Güvenlik Açıklarını Düzelt</span>
-                      </>
-                    )}
-                  </Button>
-                )}
               </div>
               
               <div className="space-y-4">
@@ -234,9 +132,6 @@ export default function ResultsPanel({ results, isScanning, originalCode, onCode
                       key={vulnerability.id} 
                       vulnerability={vulnerability} 
                       originalCode={originalCode}
-                      onCodeFixed={onCodeFixed}
-                      isAllFixing={isFixingAll}
-                      isAllFixed={fixedAll}
                     />
                   ))
                 }
