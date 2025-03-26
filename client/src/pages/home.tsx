@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import CodeInputPanel from "@/components/code-input-panel";
 import ResultsPanel from "@/components/results-panel";
-import { ScanResult } from "@shared/schema";
+import { SecurityDashboard } from "@/components/dashboard";
+import { ScanResult, Vulnerability } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
 
 export default function Home() {
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
@@ -39,6 +41,21 @@ export default function Home() {
   
 
 
+  const [selectedVulnerability, setSelectedVulnerability] = useState<Vulnerability | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Handle clicking on a vulnerability in the threat map
+  const handleVulnerabilitySelect = (vuln: Vulnerability) => {
+    setSelectedVulnerability(vuln);
+    
+    // Scroll to results panel
+    setTimeout(() => {
+      if (resultsRef.current) {
+        resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-white border-b border-gray-200 shadow-sm">
@@ -70,12 +87,28 @@ export default function Home() {
             isScanning={isScanning} 
             initialCode={currentCode}
           />
-          <ResultsPanel 
-            results={scanResults} 
-            isScanning={isScanning} 
-            originalCode={currentCode}
-          />
+          <div className="lg:col-span-2" ref={resultsRef}>
+            <ResultsPanel 
+              results={scanResults} 
+              isScanning={isScanning} 
+              originalCode={currentCode}
+            />
+          </div>
         </div>
+        
+        {scanResults && (
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mt-10"
+          >
+            <SecurityDashboard 
+              scanResult={scanResults} 
+              onVulnerabilitySelect={handleVulnerabilitySelect}
+            />
+          </motion.div>
+        )}
       </main>
 
       <footer className="bg-white border-t border-gray-200">
