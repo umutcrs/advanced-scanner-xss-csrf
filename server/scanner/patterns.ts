@@ -4023,10 +4023,49 @@ app.get('/api/jsonp', (req, res) => {
 });`
   },
   
-  // CSP Nonce Bypass
+  // CSP Nonce Theft and Script Injection
   {
-    type: "cspNonceBypass",
-    regex: /document\.querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)\s*\.nonce/g,
+    type: "cspNonceTheft",
+    regex: /(?:document\.querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)|querySelector\s*\(\s*['"]script\[nonce\]['"]\s*\)|getElementsByTagName\s*\(\s*['"]script['"]\s*\)|\w+\.nonce)\s*\.nonce/g,
+    severity: "critical" as const,
+    title: "CSP Nonce Exfiltration",
+    description: "Extracting CSP nonces from script tags and reusing them can bypass Content Security Policy protections.",
+    recommendation: "Don't expose CSP nonces to untrusted code. Use strict CSP and avoid inline event handlers.",
+    recommendationCode: `// DANGEROUS CODE - Extracts CSP nonces:
+// const cspNonce = document.querySelector('script[nonce]').nonce;
+// const scriptEl = document.createElement('script');
+// scriptEl.nonce = cspNonce; // Bypasses CSP by reusing valid nonce
+// scriptEl.src = maliciousUrl;
+// document.head.appendChild(scriptEl);
+
+// PREVENTION STRATEGIES:
+// 1. Server-side headers (Node.js/Express example)
+app.use((req, res, next) => {
+  // Generate unique nonce per request
+  const nonce = crypto.randomBytes(16).toString('base64');
+  
+  // Apply strict CSP with nonce and no unsafe-inline
+  res.setHeader(
+    'Content-Security-Policy',
+    \`script-src 'nonce-\${nonce}' 'strict-dynamic' https:; object-src 'none'; base-uri 'none';\`
+  );
+  
+  // Make nonce available to templates
+  res.locals.cspNonce = nonce;
+  next();
+});
+
+// 2. Don't use DOM APIs to expose nonces to JavaScript
+// In your template, use the nonce directly from server:
+// <script nonce="<%= cspNonce %>">
+//   // Your scripts here
+// </script>`
+  },
+  
+  // Script Element Creation with Nonce Setting
+  {
+    type: "scriptNonceAssignment",
+    regex: /\w+\.nonce\s*=\s*.*?nonce/g,
     severity: "critical" as const,
     title: "CSP Nonce Exfiltration",
     description: "Extracting CSP nonces from script tags and reusing them can bypass Content Security Policy protections.",
