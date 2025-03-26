@@ -500,6 +500,7 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "dynamicScriptInjection": 0.95,
     "angularTemplateInjection": 0.90,
     "prototypeExpando": 0.90,
+    "prototypeManipulation": 0.60, // Düşük confidence ile false positive'leri azalt
     "sanitizationBypass": 0.95, // New pattern - high confidence
     
     // CSRF-specific patterns - critical severity

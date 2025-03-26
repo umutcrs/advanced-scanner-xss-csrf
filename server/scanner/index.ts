@@ -151,14 +151,26 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     }
     
     // Object.defineProperty için özel durum kontrolü
-    if (vul.type === "prototypeManipulation" && codeSnippet.includes("Object.defineProperty")) {
-      // Modül dışa aktarım deseni için kontrol
-      if (codeSnippet.includes("exports") && codeSnippet.includes("__esModule")) {
+    if (vul.type === "prototypeManipulation") {
+      // ES modül transpile edilmiş yaygın desenlerini filtrele - Bu tür desenler her zaman güvenlidir
+      if (codeSnippet.includes("Object.defineProperty") && 
+          codeSnippet.includes("exports") && 
+          codeSnippet.includes("__esModule")) {
         // Bu yaygın bir modül dışa aktarım deseni, güvenli
         continue;
       }
       
-      // Normal exports.XX = YY desenini kontrol et
+      // CommonJS/UMD exports model
+      if (codeSnippet.match(/Object\.defineProperty\s*\(\s*exports/)) {
+        if (codeSnippet.includes("__esModule") || 
+            !codeSnippet.includes("prototype") || 
+            !codeSnippet.includes("__proto__")) {
+          // Exports modeli güvenlidir - prototype olmayan property'ler için
+          continue;
+        }
+      }
+      
+      // Normal exports.XX = YY desenini kontrol et (Object.defineProperty kullanılmayan normal assign)
       if (codeSnippet.match(/exports\.\w+\s*=/) && !codeSnippet.match(/\[.*\]/)) {
         // Statik property adları içeren dışa aktarımlar güvenlidir
         continue;

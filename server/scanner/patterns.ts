@@ -5,11 +5,11 @@ import { ScanPattern } from "../../shared/schema";
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns: ScanPattern[] = [
-  // Prototype Pollution Detection
+  // Prototype Pollution Detection - only for dangerous patterns
   {
     type: "prototypeManipulation",
     regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|prototype)/gi,
-    skipPattern: /(?:)/i,
+    skipPattern: /Object\.defineProperty\s*\(\s*exports,\s*["']__esModule["']/i,
     severity: "high" as const,
     title: "Prototype Pollution Vulnerability",
     description: "This code directly modifies object prototypes which can lead to prototype pollution attacks if input is not properly validated.",
