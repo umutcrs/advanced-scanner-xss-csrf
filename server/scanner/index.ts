@@ -9,6 +9,15 @@ import {
 } from "./utils";
 import { v4 as uuidv4 } from "uuid";
 
+// ES Module dışa aktarım whitelist - Bu ifadeler kesinlikle güvenli olarak kabul edilir
+const moduleExportsWhitelist = `Object.defineProperty(exports, "__esModule", { value: true });
+Object.defineProperty(module.exports, "__esModule", { value: true });
+Object.defineProperty(exports, "default", { enumerable: true, value: true });
+Object.defineProperty(exports, "__esModule", { enumerable: true, value: true })
+Object.defineProperty(exports, "default", { enumerable: true, value: function() { return module.exports; } });
+Object.defineProperty(module.exports, "default", { enumerable: true, value: true });
+Object.defineProperty(exports.default, "__esModule", { value: true });`;
+
 // Confidence threshold - vulnerabilities with lower scores will be excluded
 // Fine-tuned thresholds for optimal true/false positive balance
 const CONFIDENCE_THRESHOLD = 0.35; // Balanced threshold that catches real issues without too many false positives
