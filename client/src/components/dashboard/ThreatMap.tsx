@@ -108,13 +108,7 @@ const ThreatMap: React.FC<ThreatMapProps> = ({ scanResult, onVulnerabilitySelect
       
       <div className="p-4">
         <div className="relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
-              <AlertCircle className="h-10 w-10 text-gray-400" />
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap justify-center gap-6 py-10">
+          <div className="flex flex-wrap justify-center gap-6 py-6">
             {vulnerabilityTypes.map((vulnType, index) => (
               <motion.div
                 key={vulnType.type}

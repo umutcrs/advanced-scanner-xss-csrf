@@ -81,6 +81,20 @@ export default function Home() {
           <p className="text-gray-600 max-w-3xl">Analyze your JavaScript code for Cross-Site Scripting (XSS) vulnerabilities. Upload a file or paste your code to identify potential security issues.</p>
         </div>
 
+        {scanResults && (
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-10"
+          >
+            <SecurityDashboard 
+              scanResult={scanResults} 
+              onVulnerabilitySelect={handleVulnerabilitySelect}
+            />
+          </motion.div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <CodeInputPanel 
             onScan={handleScan} 
@@ -95,20 +109,6 @@ export default function Home() {
             />
           </div>
         </div>
-        
-        {scanResults && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="mt-10"
-          >
-            <SecurityDashboard 
-              scanResult={scanResults} 
-              onVulnerabilitySelect={handleVulnerabilitySelect}
-            />
-          </motion.div>
-        )}
       </main>
 
       <footer className="bg-white border-t border-gray-200">
