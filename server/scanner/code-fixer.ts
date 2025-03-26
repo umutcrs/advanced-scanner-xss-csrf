@@ -175,7 +175,8 @@ function fixDangerouslySetInnerHTML(code: string): string {
  */
 function fixEval(code: string): string {
   // Check if code already contains our fix marker to avoid duplicate fixes
-  if (code.includes('// SECURITY NOTICE: eval should be avoided.')) {
+  if (code.includes('// SECURITY NOTICE: eval should be avoided.') || 
+      code.includes('/* SECURITY-FIX-APPLIED:EVAL */')) {
     return code;
   }
   
@@ -191,6 +192,7 @@ function fixEval(code: string): string {
     // Check if it's a mathematical expression
     if (content.includes('Math.') || /[+\-*/]/.test(content)) {
       return `
+/* SECURITY-FIX-APPLIED:EVAL */
 // Instead of eval for mathematical expressions, use a safer approach
 // If you need complex expressions, consider using a math library like math.js
 const calculateExpression = (expr) => {
@@ -206,6 +208,7 @@ calculateExpression(${content})`;
     
     // Generic replacement
     return `
+/* SECURITY-FIX-APPLIED:EVAL */
 // SECURITY NOTICE: eval should be avoided.
 // If you need to process data, use JSON.parse for JSON or 
 // other purpose-specific parsers for other formats.
@@ -422,7 +425,8 @@ function fixMutationXSS(code: string): string {
  */
 function fixScriptSrc(code: string): string {
   // Check if code already contains our fix marker to avoid duplicate fixes
-  if (code.includes('// SECURITY FIX: Added script source validation')) {
+  if (code.includes('// SECURITY FIX: Added script source validation') ||
+      code.includes('/* SECURITY-FIX-APPLIED:SCRIPTSRC */')) {
     return code;
   }
   
@@ -431,6 +435,7 @@ function fixScriptSrc(code: string): string {
   
   return code.replace(regex, (match, src) => {
     return `
+/* SECURITY-FIX-APPLIED:SCRIPTSRC */
 // SECURITY FIX: Added script source validation
 (() => {
   const trustedDomains = [
