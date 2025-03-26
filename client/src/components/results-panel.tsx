@@ -235,6 +235,8 @@ export default function ResultsPanel({ results, isScanning, originalCode, onCode
                       vulnerability={vulnerability} 
                       originalCode={originalCode}
                       onCodeFixed={onCodeFixed}
+                      isAllFixing={isFixingAll}
+                      isAllFixed={fixedAll}
                     />
                   ))
                 }
