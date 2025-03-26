@@ -3841,6 +3841,42 @@ function sendSafeMessage(socket, messageText) {
 }`
   },
   
+  // WebSocket Raw Message Injection
+  {
+    type: "webSocketRawInjection",
+    regex: /ws\.send\s*\(\s*[\`'"]+.*?\$\{.*?message.*?\}/g,
+    severity: "high" as const,
+    title: "WebSocket Raw Message Injection",
+    description: "Sending unsanitized user input via WebSockets using string interpolation can lead to XSS vulnerabilities when the receiving end renders the content.",
+    recommendation: "Always sanitize or escape user content before sending it through WebSockets.",
+    recommendationCode: `// UNSAFE:
+// ws.send(\`Message: \${userInput}\`);
+
+// SAFER approaches:
+// Option 1: Escape HTML characters
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+ws.send(\`Message: \${escapeHtml(userInput)}\`);
+
+// Option 2: For Node.js servers, sanitize on the server side
+const sanitizedMessage = DOMPurify.sanitize(message);
+ws.send(\`Message received: \${sanitizedMessage}\`);
+
+// Option 3: Use structured data with content type
+ws.send(JSON.stringify({
+  type: 'message',
+  content: userInput,
+  contentType: 'text'  // Indicates this should be treated as plain text
+}));`
+  },
+  
   // Vue v-bind:HTML
   {
     type: "vueVBind",
