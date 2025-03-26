@@ -173,6 +173,11 @@ function fixDangerouslySetInnerHTML(code: string): string {
  * Fix for eval vulnerabilities
  */
 function fixEval(code: string): string {
+  // Check if code already contains our fix marker to avoid duplicate fixes
+  if (code.includes('// SECURITY NOTICE: eval should be avoided.')) {
+    return code;
+  }
+  
   // Complex fix for eval - we need to understand what's being evaluated
   const regex = /eval\s*\(([^)]+)\)/g;
   return code.replace(regex, (match, content) => {
@@ -337,6 +342,11 @@ function fixClientTemplateInjection(code: string): string {
  * Fix for JSON.parse vulnerabilities
  */
 function fixJsonParse(code: string): string {
+  // Check if code already contains our fix marker to avoid duplicate fixes
+  if (code.includes('// Safe JSON parsing with validation and error handling')) {
+    return code;
+  }
+  
   // Add a try-catch block around JSON.parse calls
   const regex = /JSON\.parse\s*\(\s*([^)]+)\)/g;
   return code.replace(regex, (match, jsonString) => {
@@ -404,6 +414,11 @@ function fixMutationXSS(code: string): string {
  * Fix for script src assignment vulnerabilities
  */
 function fixScriptSrc(code: string): string {
+  // Check if code already contains our fix marker to avoid duplicate fixes
+  if (code.includes('// SECURITY FIX: Added script source validation')) {
+    return code;
+  }
+  
   // Add whitelisting logic for script sources
   const regex = /(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*([^;]+)/g;
   
