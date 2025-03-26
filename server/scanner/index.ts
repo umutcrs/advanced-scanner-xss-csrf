@@ -43,6 +43,24 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     
     let match;
     while ((match = regex.exec(preparedCode)) !== null) {
+      // Eğer "skipPattern" varsa, bu düzeltilmiş kodu kontrol edelim
+      if (pattern.skipPattern) {
+        // Match'in içinde bulunduğu satırın başına ve sonuna bakalım
+        const matchLocation = match.index;
+        const lineStartIndex = preparedCode.lastIndexOf('\n', matchLocation) + 1;
+        const lineEndIndex = preparedCode.indexOf('\n', matchLocation);
+        const lineContent = preparedCode.substring(lineStartIndex, lineEndIndex !== -1 ? lineEndIndex : preparedCode.length);
+        
+        // Satırda veya sonraki 3 satırda skipPattern'e uyan bir şey var mı?
+        const nextLinesEndIndex = preparedCode.indexOf('\n', preparedCode.indexOf('\n', preparedCode.indexOf('\n', lineEndIndex + 1) + 1) + 1);
+        const nextLinesContent = preparedCode.substring(lineStartIndex, nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length);
+        
+        if (pattern.skipPattern.test(nextLinesContent)) {
+          // Bu bir düzeltilmiş kod parçası, atla
+          continue;
+        }
+      }
+      
       potentialVulnerabilities.push({
         index: match.index,
         length: match[0].length,

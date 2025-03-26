@@ -514,7 +514,8 @@ function UserContent({ content }) {
   {
     type: "eval",
     regex: /eval\s*\(([^)]*)\)/g,
-    // Bu regex, zaten düzeltilmiş kodda bulunan "eval() replaced with safer alternative by XSS scanner" yorumunu tanımaz
+    // Düzeltilmiş kod için görmezden gelme kontrolü eklendi
+    skipPattern: /\/\/\s*SECURITY\s*NOTICE:\s*eval\s*should\s*be\s*avoided/,
     severity: "critical" as const,
     title: "Unsafe eval() Usage",
     description: "The use of eval() with user input creates a severe XSS vulnerability that allows arbitrary code execution.",
