@@ -150,6 +150,21 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
       continue;
     }
     
+    // Object.defineProperty için özel durum kontrolü
+    if (vul.type === "prototypeManipulation" && codeSnippet.includes("Object.defineProperty")) {
+      // Modül dışa aktarım deseni için kontrol
+      if (codeSnippet.includes("exports") && codeSnippet.includes("__esModule")) {
+        // Bu yaygın bir modül dışa aktarım deseni, güvenli
+        continue;
+      }
+      
+      // Normal exports.XX = YY desenini kontrol et
+      if (codeSnippet.match(/exports\.\w+\s*=/) && !codeSnippet.match(/\[.*\]/)) {
+        // Statik property adları içeren dışa aktarımlar güvenlidir
+        continue;
+      }
+    }
+    
     const confidence = calculateConfidenceScore(preparedCode, vul.match, vul.type);
     
     // Apply different confidence thresholds based on severity
