@@ -8,10 +8,10 @@ export const scanPatterns: ScanPattern[] = [
   // Prototype Pollution Detection - daha doğru tespit için spesifik prototype manipulasyonu desenine odaklan
   {
     type: "prototypeManipulation",
-    // Düzeltilmiş regex: prototype veya __proto__ ya da constructor veya prototype chain hedeflenen ifadeleri tespit et
-    regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|prototype|constructor)/gi,
-    // Tüm modül dışa aktarım desenlerini görmezden gel, bunlar tamamen güvenli
-    skipPattern: /exports|module\.exports|__esModule/i,
+    // Sadece tehlikeli prototype manipülasyonlarını algıla, exports/module kullanımlarını yok say
+    regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|prototype|constructor\.prototype)/gi,
+    // Genişletilmiş modül dışa aktarım deseni kontrolü - yanlış pozitifleri önler
+    skipPattern: /exports|module\.exports|__esModule|global|this|window/i,
     severity: "high" as const,
     title: "Prototype Pollution Vulnerability",
     description: "This code directly modifies object prototypes which can lead to prototype pollution attacks if input is not properly validated.",

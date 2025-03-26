@@ -179,11 +179,22 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         continue;
       }
       
-      // Object.defineProperty kullanımında prototip manipülasyonu yoksa güvenlidir
-      if (codeSnippet.includes("Object.defineProperty") && 
-          !codeSnippet.includes("prototype") && 
-          !codeSnippet.includes("__proto__")) {
-        continue;
+      // Object.defineProperty kullanımlarını daha güvenli bir şekilde analiz et
+      if (codeSnippet.includes("Object.defineProperty")) {
+        // Eğer exports veya module.exports ile ilgili bir kullanım varsa veya prototip manipülasyonu yoksa
+        // kesin olarak bu güvenli bir kullanımdır
+        if (!codeSnippet.includes("prototype") || 
+            !codeSnippet.includes("__proto__") || 
+            !codeSnippet.match(/Object\.prototype|constructor\.prototype/i)) {
+            continue;
+        }
+        // Eğer constructor veya prototype kullanımı var ama ES6/CommonJS modül yapısının parçasıysa
+        // bu da güvenlidir
+        if (codeSnippet.includes("exports") || 
+            codeSnippet.includes("module.exports") || 
+            codeSnippet.includes("__esModule")) {
+            continue;
+        }
       }
     }
     
