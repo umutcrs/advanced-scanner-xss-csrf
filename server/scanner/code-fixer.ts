@@ -497,13 +497,13 @@ function fixMetaTagContent(code: string): string {
  * Utility function to add DOMPurify to code
  */
 function addDOMPurify(code: string, regex: RegExp, replacement: string): string {
-  let updatedCode = code;
+  // Add DOMPurify import if it doesn't exist
+  let result = code;
   
-  // Check if we need to add the import
-  if (!updatedCode.includes('import DOMPurify') && !updatedCode.includes('DOMPurify')) {
-    updatedCode = "import DOMPurify from 'dompurify';\n" + updatedCode;
+  if (!code.includes('import DOMPurify from') && !code.includes('require("dompurify")')) {
+    result = `import DOMPurify from 'dompurify';\n${code}`;
   }
   
-  // Apply the replacement
-  return updatedCode.replace(regex, replacement);
+  // Apply the DOMPurify sanitization
+  return result.replace(regex, replacement);
 }
