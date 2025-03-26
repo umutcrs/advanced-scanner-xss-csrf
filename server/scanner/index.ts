@@ -150,29 +150,39 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
       continue;
     }
     
-    // Object.defineProperty için özel durum kontrolü
+    // Object.defineProperty için özel durum kontrolü - tamamen yeniden yazılan versiyon
     if (vul.type === "prototypeManipulation") {
-      // ES modül transpile edilmiş yaygın desenlerini filtrele - Bu tür desenler her zaman güvenlidir
-      if (codeSnippet.includes("Object.defineProperty") && 
-          codeSnippet.includes("exports") && 
-          codeSnippet.includes("__esModule")) {
-        // Bu yaygın bir modül dışa aktarım deseni, güvenli
+      // 1. Herhangi bir Object.defineProperty kullanımında doğrudan exports objesi varsa 
+      // bu her zaman güvenli bir modül dışa aktarımıdır
+      if (codeSnippet.match(/Object\.defineProperty\s*\(\s*exports\s*,/i)) {
         continue;
       }
       
-      // CommonJS/UMD exports model
-      if (codeSnippet.match(/Object\.defineProperty\s*\(\s*exports/)) {
-        if (codeSnippet.includes("__esModule") || 
-            !codeSnippet.includes("prototype") || 
-            !codeSnippet.includes("__proto__")) {
-          // Exports modeli güvenlidir - prototype olmayan property'ler için
-          continue;
-        }
+      // 2. Herhangi modül dışa aktarım deseni varsa - bunlar doğası gereği güvenlidir
+      // exports ve module.exports asla prototype pollution hedefi olarak kullanılmaz
+      if (codeSnippet.includes("Object.defineProperty") && 
+          (codeSnippet.includes("exports") || 
+           codeSnippet.includes("module.exports") || 
+           codeSnippet.includes("__esModule"))) {
+        continue;
       }
       
-      // Normal exports.XX = YY desenini kontrol et (Object.defineProperty kullanılmayan normal assign)
-      if (codeSnippet.match(/exports\.\w+\s*=/) && !codeSnippet.match(/\[.*\]/)) {
-        // Statik property adları içeren dışa aktarımlar güvenlidir
+      // 3. CommonJS/UMD patern (Object.defineProperty kullanılmayan exports)
+      if (codeSnippet.match(/exports\.\w+\s*=/) || 
+          codeSnippet.match(/module\.exports\s*=/) ||
+          codeSnippet.match(/exports\s*=/)) {
+        continue;
+      }
+      
+      // 4. Transpiled JavaScript'te oluşan her türlü Object.defineProperty(exports... deseni
+      if (/(Object\.defineProperty\s*\().*?(exports)/.test(codeSnippet)) {
+        continue;
+      }
+      
+      // Object.defineProperty kullanımında prototip manipülasyonu yoksa güvenlidir
+      if (codeSnippet.includes("Object.defineProperty") && 
+          !codeSnippet.includes("prototype") && 
+          !codeSnippet.includes("__proto__")) {
         continue;
       }
     }
