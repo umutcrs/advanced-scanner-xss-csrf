@@ -124,81 +124,122 @@ export function formatCodeSnippet(code: string): string {
 export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: number, length: number, type: string}>): Array<{index: number, length: number, type: string}> {
   // Common user input sources with expanded patterns
   const userInputSources = [
-    // DOM input sources
-    /document\.getElementById\([^)]+\)\.value/g,
-    /document\.querySelector\([^)]+\)\.value/g,
-    /getElementById\([^)]+\)\.value/g,
-    /querySelector\([^)]+\)\.value/g,
-    /\.(value|innerHTML|innerText|textContent)/g,
-    /document\.forms\[\s*(['"]?\w+['"]?|[0-9]+)\s*\]/g,
-    /\belement\.value|\binput\.value|\bfield\.value/g,
+    // DOM input sources - expanded and optimized
+    /document\.getElementById\([^)]+\)(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /document\.querySelector\([^)]+\)(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /getElementById\([^)]+\)(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /querySelector\([^)]+\)(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /querySelectorAll\([^)]+\)(?:\[\d+\])?(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /\b(?:el|elem|element|input|field|form|textarea|select|option|button|checkbox|radio|target)(?:\.value|\.innerHTML|\.innerText|\.textContent)/g,
+    /document\.forms\[\s*(['"]?\w+['"]?|[0-9]+)\s*\](?:\[['"]?\w+['"]?\])?/g,
+    /\b(?:form|el|input)(?:Data|Element|Value|Field)s?\b/gi,
     
-    // Direct user inputs
-    /\bprompt\s*\(/g,
-    /\bconfirm\s*\(/g,
-    /\balert\s*\(/g,
+    // Direct user inputs - enhanced detection
+    /\bprompt\s*\([^)]*\)/g,
+    /\bconfirm\s*\([^)]*\)/g,
+    /\balert\s*\([^)]*\)/g,
+    /\bwindow\.(?:prompt|confirm|alert)\s*\(/g,
     
-    // URL and location data
-    /\blocation\.(?:href|search|hash|pathname|origin|host)/g,
-    /\bURL\.searchParams\.get\s*\(/g,
-    /\bnew\s+URLSearchParams\s*\(/g,
-    /\bwindow\.location/g,
-    /\bdocument\.URL/g,
-    /\bdocument\.documentURI/g,
-    /\bdocument\.referrer/g,
+    // URL and location data - improved patterns
+    /\b(?:window\.)?location\.(?:href|search|hash|pathname|origin|host|hostname|port|protocol|username|password|origin|ancestorOrigins)/g,
+    /\bnew\s+URL\s*\([^)]*\)/g,
+    /\bURL\.searchParams\.get\s*\([^)]*\)/g,
+    /\bnew\s+URLSearchParams\s*\([^)]*\)/g,
+    /\bdocument\.(?:URL|documentURI|referrer|baseURI)/g,
+    /\bhistory\.(?:state|pushState|replaceState)/g,
+    /\b(?:get|extract)(?:Url|QueryString|SearchParam)s?\b/gi,
+    /\burl(?:Data|Params|Search|Query|Path|Fragment|Hash)s?\b/gi,
     
-    // Network requests
-    /\$\.(?:get|post|ajax)\s*\(/g,
-    /\$\.(?:getJSON|load)\s*\(/g,
-    /\bfetch\s*\(/g,
-    /\baxios\.(?:get|post|request|put|patch|delete)\s*\(/g,
-    /\bnew\s+XMLHttpRequest/g,
+    // Framework state management - new patterns
+    /\buseParams\b|\buseSearchParams\b|\buseLocation\b|\buseNavigate\b|\buseRouter\b/g, // React Router hooks
+    /\brouter\.(?:query|params|pathname|asPath|route)\b/g, // Next.js router
+    /\b(?:useSelector|useDispatch|useStore|connect)\b/g, // Redux
+    /\bthis\.(?:props|state)\.(?!children|className|style|id|key|ref)/g, // React component state/props
+    /\bconst\s+\[\s*\w+\s*,\s*set[A-Z]\w+\s*\]\s*=\s*(?:React\.)?useState\b/g, // React useState hook
+    /\bconst\s+\w+\s*=\s*(?:React\.)?useRef\s*\(/g, // React useRef hook
+    /\$store\.\w+/g, // Svelte store
+    /\b(?:v-model|v-bind|v-on|@|:)=/g, // Vue binding syntax
+    /\[\s*(?:v-model|v-bind)\s*\]/g, // Vue array bindings
+    
+    // Network requests - additional APIs
+    /\$\.(?:get|post|ajax|getJSON|load|put|delete)\s*\(/g, // jQuery AJAX
+    /\bfetch\s*\(/g, 
+    /\b(?:await\s+)?axios\.(?:get|post|request|put|patch|delete)\s*\(/g,
+    /\bnew\s+XMLHttpRequest\b/g,
     /\bXMLHttpRequest\.(?:open|send)\s*\(/g,
-    /\.then\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/g,
-    /\.catch\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/g,
-    /\bawait\s+(?:fetch|axios|response)\b/g,
-    /\.json\(\s*\)|\.text\(\s*\)|\.blob\(\s*\)/g,
+    /\.then\s*\(\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_$]+\s*=>)/g, // Promise chains
+    /\b(?:await|async)\b/g, // async/await pattern
+    /\bresponse\.(?:json|text|blob|formData|arrayBuffer)\(\)/g, // Response parsing
+    /\bwebsocket\.send\b|\bsocket\.emit\b|\bio\.emit\b/g, // WebSocket/Socket.io
     
-    // Storage access
-    /\blocalStorage\.getItem\s*\(/g,
-    /\bsessionStorage\.getItem\s*\(/g,
-    /\bcookie\s*=|document\.cookie/g,
-    /\bIndexedDB\b|\bidb\b/g,
-    
-    // URL utilities
-    /\bURL\s*\(/g,
-    /\bdecodeURI\s*\(/g,
-    /\bdecodeURIComponent\s*\(/g,
+    // Storage access - enhanced detection
+    /\b(?:local|session)Storage\.(?:getItem|key|get)\s*\(/g,
+    /\bdocument\.cookie\b|\bcookies\[\b|\bcookieStore\.\b/g,
+    /\bIndexedDB\b|\bidb\b|\bopenDatabase\b/g,
+    /\bcache\b|\bCacheStorage\b|\bcaches\.\b/g,
     
     // Event handlers (common source of user input)
-    /\bonchange\s*=|\bonpaste\s*=|\boninput\s*=|\bonsubmit\s*=/g,
-    /addEventListener\s*\(\s*['"](?:input|change|paste|submit|keyup|keydown|keypress|click)['"]]/g,
-    /\bevent\.(?:target|currentTarget|srcElement)\b/g,
-    /\be\.(?:target|currentTarget)\b/g,
+    /\bon(?:change|paste|input|submit|keyup|keydown|keypress|click|focus|blur|select)="?[^"]+"?/g,
+    /addEventListener\s*\(\s*['"](?:input|change|paste|submit|keyup|keydown|keypress|click|focus|blur|select|message|dragover|drop|mouseup|mousedown)['"]]/g,
+    /\b(?:e|event|evt)\.(?:target|currentTarget|srcElement|data|detail)\b/g,
+    /\b(?:e|event|evt)\.(?:target|currentTarget)\.(?:value|innerHTML|innerText|textContent)/g,
+    /\bmessage(?:Event)?\.data\b/g, // postMessage data
     
-    // Frameworks
-    /\$\(\s*['"][^'"]*['"]\s*\)\.val\(\s*\)/g, // jQuery value getter
-    /\bangular\b|\bng-model\b|\bng-bind\b/g,   // Angular bindings
-    /\bv-model\b|\bv-bind\b/g,                 // Vue bindings
-    /\bthis\.(?:state|props)\.[a-zA-Z0-9_$]+/g, // React state/props
-    /\buseState\s*\(|\buseRef\s*\(/g,           // React hooks
+    // Advanced framework patterns
+    /\$\(\s*['"][^'"]*['"]\s*\)\.(?:val|html|text)\(\s*\)/g, // jQuery getters
+    /\bng-(?:model|bind|init|value|change)\b/g, // Angular directives
+    /\b(?:\[\(ngModel\)\]|\[ngModel\]|[(]ngModelChange[)])/g, // Angular bindings
+    /\bthis\.(?:form(?:Group|Control|Builder|Array)|controls)\b/g, // Angular forms
+    /\b(?:formControl|formControlName|formGroup|formGroupName|formArray)\b/g, // Angular form directives
+    /\bv-(?:model|bind|on|html|text)\b/g, // Vue directives
+    /\bdata\(\s*\)\s*{\s*return\s*{/g, // Vue data method
+    /\bcomputed\s*:\s*{/g, // Vue computed property
     
-    // Common variable names often holding user input
-    /\b(?:user|input|value|param|data|content|field|text|query|request|search|payload|message|name|email|password|address|content)(?:Value|Data|Input|Content|Field|Text)?\b/gi
+    // File & Upload Handling - new category
+    /\bnew\s+FileReader\b/g,
+    /\bFileReader\.readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\b/g,
+    /\b(?:input|e|event)\.(?:target|currentTarget)\.files\b/g,
+    /\bFormData\.(?:append|set|get)\b/g,
+    /\bnew\s+FormData\b/g,
+    /\bFile\b|\bBlob\b|\bFileList\b/g,
+    /\bdropzone\b|\bdrag(?:over|enter|leave|drop)\b/g,
+    
+    // Common variable name patterns that often contain user data
+    /\b(?:user|input|value|param|data|content|field|text|query|request|search|payload|message|name|email|password|address|content|post|get|response|result|json|xml|html|string|form)(?:Value|Data|Input|Content|Field|Text|String|Object|Json|Params|Info)?\b/gi,
+    
+    // Variables with names that suggest external data
+    /\b(?:external|remote|client|browser|user|customer|visitor|guest|member|profile|account|identity|auth|login|signin|register|signup|credential)(?:Data|Input|Info|Profile|Details|Settings|Preferences|Config|Configuration|Context|State)?\b/gi,
+    
+    // Data transformation and encoding - usually indicates user data processing
+    /\.(?:replace|replaceAll|split|join|substring|substr|slice|toLowerCase|toUpperCase|trim|match|search)\(/g,
+    /\b(?:JSON|Object)\.(?:parse|stringify)\(/g,
+    /\bencodeURI(?:Component)?\(/g,
+    /\bdecodeURI(?:Component)?\(/g,
+    /\b(?:String|Number|Boolean|Array|Object|parseInt|parseFloat|isNaN|isFinite)\(/g,
+    
+    // Template construction - commonly used with user data
+    /`[^`]*\${[^}]*}/g, // Template literal with interpolation
+    /(?:html|template|markup|content)(?:\s*\+=\s*|\s*=\s*(?:html|template|markup|content)\s*\+\s*)/gi // String concatenation for HTML
   ];
   
   // List of high-risk vulnerability types that should always be included
   const highRiskTypes = [
     // Critical severity
-    'eval', 'indirectEval', 'functionConstructor', 'jsGlobalWithEval',
+    'eval', 'indirectEval', 'functionConstructor', 'jsGlobalWithEval', 'newFunction',
     'innerHTML', 'outerHTML', 'dangerouslySetInnerHTML', 'scriptTextContent',
     'setAttributeEvent', 'srcdocAssignment', 'trustedTypesEscape', 
     'dynamicScriptInjection', 'angularTemplateInjection', 'prototypeExpando',
+    'sanitizationBypass', 'domClobbering',
     
     // High severity
     'documentWrite', 'documentWriteLn', 'insertAdjacentHTML', 'setTimeout', 
-    'setInterval', 'jqueryHtmlMethod', 'htmlTemplateInjection', 'baseHref'
+    'setInterval', 'jqueryHtmlMethod', 'htmlTemplateInjection', 'baseHref', 'scriptSrc',
+    'templateLiteralInjection', 'mutationXSS', 'clientTemplateInjection',
+    'jsonpCallback', 'scriptSrcAssignment'
   ];
+  
+  // Enhanced context window size for better accuracy
+  const CONTEXT_WINDOW = 1200; // Increased context window for better variable tracing
   
   const validatedVulnerabilities = [];
   
@@ -206,9 +247,19 @@ export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: n
     // Skip very small code blocks that are likely to be false positives
     if (vul.length < 3) continue;
     
-    // Extract a larger context around the vulnerability
-    const contextStartIndex = findContextStart(code, vul.index, 800);
-    const contextCode = code.substring(contextStartIndex, vul.index + vul.length);
+    // Extract a larger context around the vulnerability for a more comprehensive analysis
+    const contextStartIndex = findContextStart(code, vul.index, CONTEXT_WINDOW);
+    const contextCode = code.substring(contextStartIndex, vul.index + vul.length + 200);
+    
+    // Check if the vulnerability is in a comment and skip if it is
+    if (isInsideComment(code, vul.index, vul.index + vul.length)) {
+      continue; // Skip this vulnerability as it's inside a comment
+    }
+    
+    // Skip if inside a string literal and not a high-risk vulnerability type
+    if (isInsideStringLiteral(code, vul.index) && !highRiskTypes.includes(vul.type)) {
+      continue; // Lower risk items inside string literals are likely false positives
+    }
     
     // Check if any user input source is present in the context
     let hasUserInput = false;
@@ -222,87 +273,178 @@ export function analyzeDataFlow(code: string, vulnerableIndices: Array<{index: n
     }
     
     // Advanced data flow tracking:
-    // Look for variable assignments that might carry user input to our vulnerability
+    // Build a more sophisticated confidence score based on multiple signals
     let dataFlowConfidence = 0;
     
     // Extract potential variable names from the vulnerability point
     const vulnCode = code.substring(vul.index, vul.index + vul.length);
-    const variableMatches = vulnCode.match(/[a-zA-Z0-9_$]+/g) || [];
     
-    if (variableMatches.length > 0) {
-      // Look for these variables being assigned from user input sources
-      for (const varName of variableMatches) {
-        // Skip common keywords and very short variable names
-        if (['if', 'else', 'for', 'while', 'var', 'let', 'const', 'function', 'return', 'true', 'false', 'null', 'undefined'].includes(varName) || varName.length < 2) {
-          continue;
-        }
+    // Use a more sophisticated regex to extract meaningful variables
+    // This better handles function arguments, array indices, and property access
+    const variablePattern = /(?:^|[^A-Za-z0-9_$])([A-Za-z0-9_$]+)(?:\.[A-Za-z0-9_$]+|\[[^\]]+\])*(?:[^A-Za-z0-9_$]|$)/g;
+    let varMatch;
+    const variables = new Set<string>();
+    
+    while ((varMatch = variablePattern.exec(vulnCode)) !== null) {
+      const varName = varMatch[1];
+      // Skip common keywords, short variables, and DOM elements
+      if (['if', 'else', 'for', 'while', 'var', 'let', 'const', 'function', 'return', 
+           'true', 'false', 'null', 'undefined', 'this', 'new', 'try', 'catch', 
+           'finally', 'switch', 'case', 'default', 'break', 'continue', 'typeof',
+           'document', 'window', 'console', 'Math', 'Date', 'String', 'Number',
+           'e', 'i', 'j', 'k', 'n', 'x', 'y'].includes(varName) || 
+          varName.length < 2) {
+        continue;
+      }
+      variables.add(varName);
+    }
+    
+    // Process each identified variable
+    for (const varName of variables) {
+      // Look for variable declarations and value assignments in the context
+      const declarationPatterns = [
+        new RegExp(`(?:var|let|const)\\s+${varName}\\s*=`, 'g'),
+        new RegExp(`${varName}\\s*=(?!=)`, 'g'),
+        new RegExp(`function\\s+${varName}\\s*\\(`, 'g'),
+        new RegExp(`\\(\\s*${varName}\\s*\\)\\s*=>`, 'g')
+      ];
+      
+      // Track if we found any declarations
+      let foundDeclaration = false;
+      let foundUserDataInDeclaration = false;
+      
+      // Check each declaration pattern
+      for (const pattern of declarationPatterns) {
+        pattern.lastIndex = 0; // Reset regex state
+        let declMatch;
         
-        // Look for assignment of this variable in the context
-        const assignmentPattern = new RegExp(`(?:var|let|const)\\s+${varName}\\s*=|${varName}\\s*=(?!=)`, 'g');
-        let match;
-        
-        while ((match = assignmentPattern.exec(contextCode)) !== null) {
-          // Look at what's being assigned to this variable
-          const assignmentPos = match.index + match[0].length;
-          const endOfLine = contextCode.indexOf(';', assignmentPos);
-          const assignmentValue = endOfLine > assignmentPos ? 
-            contextCode.substring(assignmentPos, endOfLine) : 
-            contextCode.substring(assignmentPos, assignmentPos + 30);
+        while ((declMatch = pattern.exec(contextCode)) !== null) {
+          foundDeclaration = true;
           
-          // Check if any user input sources appear in the assignment
+          // Analyze what's being assigned to this variable
+          // Get the RHS of the assignment (or function body if it's a function)
+          let endIndex: number;
+          
+          if (pattern.source.includes('function') || pattern.source.includes('=>')) {
+            // For functions, get the entire function body
+            const openBrace = contextCode.indexOf('{', declMatch.index);
+            if (openBrace === -1) continue;
+            
+            // Find matching closing brace using a simple brace counter
+            let depth = 1;
+            let closeIndex = openBrace + 1;
+            
+            while (depth > 0 && closeIndex < contextCode.length) {
+              if (contextCode[closeIndex] === '{') depth++;
+              else if (contextCode[closeIndex] === '}') depth--;
+              closeIndex++;
+            }
+            
+            endIndex = closeIndex;
+          } else {
+            // For assignments, get until the end of the statement
+            endIndex = contextCode.indexOf(';', declMatch.index);
+            if (endIndex === -1) {
+              // If no semicolon, find the next logical end point
+              const nextNewLine = contextCode.indexOf('\n', declMatch.index);
+              endIndex = nextNewLine !== -1 ? nextNewLine : contextCode.length;
+            }
+          }
+          
+          // Extract the relevant code segment
+          const codeSegment = contextCode.substring(declMatch.index, endIndex);
+          
+          // Check against user input patterns
           for (const sourceRegex of userInputSources) {
             sourceRegex.lastIndex = 0;
-            if (sourceRegex.test(assignmentValue)) {
-              dataFlowConfidence = 0.7; // Strong confidence if we find direct assignment
+            if (sourceRegex.test(codeSegment)) {
+              foundUserDataInDeclaration = true;
+              dataFlowConfidence = Math.max(dataFlowConfidence, 0.7); // Strong indication of data flow
               break;
             }
           }
           
-          // Check for data transformations that often indicate processing of user input
-          const transformPatterns = [
-            /\.replace\s*\(/g, /\.trim\s*\(\s*\)/g, /\.substring\s*\(/g, /\.split\s*\(/g,
-            /\.join\s*\(/g, /\.match\s*\(/g, /\.toLowerCase\s*\(\s*\)/g, /\.toUpperCase\s*\(\s*\)/g,
+          // Check for data transformation patterns that typically indicate user input processing
+          const transformationPatterns = [
+            /\.(?:replace|replaceAll|split|join|substring|substr|slice|trim|match|search)\(/g,
             /\+\s*['"][^'"]*['"]/g, // String concatenation
-            /\$\{/g, // Template literals
-            /JSON\.parse\s*\(/g, /JSON\.stringify\s*\(/g,
-            /encodeURI\s*\(/g, /encodeURIComponent\s*\(/g,
-            /parseInt\s*\(/g, /parseFloat\s*\(/g
+            /`[^`]*\${/g, // Template literals
+            /\bJSON\.(?:parse|stringify)\(/g,
+            /\bencode(?:URI|URIComponent)\(/g,
+            /\bdecode(?:URI|URIComponent)\(/g,
+            /\bparseInt\(/g, /\bparseFloat\(/g
           ];
           
-          for (const pattern of transformPatterns) {
+          for (const pattern of transformationPatterns) {
             pattern.lastIndex = 0;
-            if (pattern.test(assignmentValue)) {
-              dataFlowConfidence = Math.max(dataFlowConfidence, 0.4); // Moderate confidence
+            if (pattern.test(codeSegment)) {
+              dataFlowConfidence = Math.max(dataFlowConfidence, 0.5); // Medium confidence with transformations
             }
           }
         }
       }
+      
+      // If we didn't find any declaration but the variable is used, increase confidence slightly
+      // This could mean it's from a parent scope, parameter, or global variable
+      if (!foundDeclaration) {
+        dataFlowConfidence = Math.max(dataFlowConfidence, 0.3);
+      }
     }
     
-    // If user input is present, we found direct data flow, or it's a high-risk vulnerability type
-    if (hasUserInput || dataFlowConfidence >= 0.4 || highRiskTypes.includes(vul.type)) {
-      // For moderate confidence data flow, check if there's any sanitization happening
-      if (dataFlowConfidence >= 0.4 && dataFlowConfidence < 0.7) {
-        const sanitizationPatterns = [
-          /\.escape\s*\(/g, /\.sanitize\s*\(/g, /DOMPurify\.sanitize\s*\(/g,
-          /\.encodeHTML\s*\(/g, /htmlspecialchars\s*\(/g, /createTextNode\s*\(/g,
-          /textContent\s*=/g
-        ];
-        
-        // If strong evidence of sanitization, reduce our confidence
-        for (const pattern of sanitizationPatterns) {
-          pattern.lastIndex = 0;
-          if (pattern.test(contextCode)) {
-            dataFlowConfidence -= 0.3;
-            break;
-          }
-        }
+    // Enhanced advanced heuristics for common code patterns
+    
+    // 1. Detect if the vulnerability is in an event handler which often processes user input
+    if (/\b(?:on|handle)(?:[A-Z][a-zA-Z0-9]*)?(?:Click|Submit|Change|Input|KeyUp|KeyDown|KeyPress|Focus|Blur|MouseDown|MouseUp|Load)\b/.test(contextCode)) {
+      dataFlowConfidence = Math.max(dataFlowConfidence, 0.4);
+    }
+    
+    // 2. Check for API handlers or data processing functions
+    if (/\b(?:process|handle|format|parse|convert|transform|sanitize|validate|post|get|update|create|delete|fetch|load)(?:[A-Z][a-zA-Z0-9]*)?\b/.test(contextCode)) {
+      dataFlowConfidence = Math.max(dataFlowConfidence, 0.4);
+    }
+    
+    // 3. Dynamic DOM manipulation is high risk
+    if (/\b(?:create|append|insert|add|prepend|before|after|replace)(?:[A-Z][a-zA-Z0-9]*)?(?:Element|Node|Child|Content|HTML|Dom|To)\b/i.test(contextCode)) {
+      dataFlowConfidence = Math.max(dataFlowConfidence, 0.5);
+    }
+    
+    // Check for sanitization signals in the context
+    const sanitizationPatterns = [
+      /\bDOMPurify\.sanitize\s*\(/g,
+      /\bsanitize(?:HTML|Content|Input|Value|Str|String|User|Data)?\s*\(/g,
+      /\bescape(?:HTML|String|Content)?\s*\(/g,
+      /\bhtml(?:Escape|Sanitize|Clean|Filter)?\s*\(/g,
+      /\b(?:create|append)TextNode\s*\(/g,
+      /\.textContent\s*=/g,
+      /\.innerText\s*=/g,
+      /\.setAttribute\s*\(\s*['"]\w+['"](?!\s*,\s*['"]\s*\+)/g, // setAttribute without concatenation
+      /\bencodeURI(?:Component)?\s*\(/g,
+      /\.replace\s*\(\s*\/[^/]*\/g?\s*,\s*['"][^'"]*['"]\s*\)/g, // Global replacement
+      /\.replace\s*\(\s*['"](?:<|>|"|'|&)(?:[^'"]*?)['"](?:\s*,\s*['"][^'"]*['"]\s*)+\)/g, // Character sanitization
+      /\bvalid(?:ateURL|URL|URI|HTML|Content|XSS)?\s*\(/g
+    ];
+    
+    // If we detect sanitization in the context, significantly reduce confidence
+    for (const pattern of sanitizationPatterns) {
+      pattern.lastIndex = 0;
+      if (pattern.test(contextCode)) {
+        dataFlowConfidence -= 0.4; // Significant reduction for evident sanitization
+        break;
       }
-      
-      // Include the vulnerability if we still have sufficient confidence
-      if (dataFlowConfidence >= 0.4 || hasUserInput || highRiskTypes.includes(vul.type)) {
-        validatedVulnerabilities.push(vul);
-      }
+    }
+    
+    // Make final decision based on all collected evidence
+    // If it's a high-risk vulnerability type, include it unless strong sanitization evidence
+    const isHighRiskType = highRiskTypes.includes(vul.type);
+    
+    // High risk vulnerabilities included unless strong evidence against
+    if (isHighRiskType && dataFlowConfidence > -0.2) {
+      validatedVulnerabilities.push(vul);
+    }
+    // For other types, require either user input presence or sufficient data flow confidence
+    else if ((hasUserInput && dataFlowConfidence >= 0.2) || 
+             (!hasUserInput && dataFlowConfidence >= 0.5)) {
+      validatedVulnerabilities.push(vul);
     }
   }
   
