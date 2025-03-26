@@ -5,6 +5,131 @@ import { ScanPattern } from "../../shared/schema";
  * Each pattern includes detailed descriptions, severity ratings, and secure code recommendations
  */
 export const scanPatterns: ScanPattern[] = [
+  // Advanced DOM-based XSS Detection
+  {
+    type: "domBasedXSS",
+    regex: /(?:document\.getElementById|document\.querySelector|document\.getElementsByClassName|document\.getElementsByTagName|querySelector)\s*\([^)]*\)(?:\.(?:innerHTML|outerHTML|insertAdjacentHTML))\s*=\s*(?:[^;]*(?:location|document\.URL|document\.documentURI|document\.cookie|document\.referrer))/gi,
+    severity: "critical" as const,
+    title: "DOM-based Cross-Site Scripting (XSS)",
+    description: "DOM-based XSS occurs when JavaScript code takes data from an attacker-controllable source (like URL fragments) and passes it to a sink that supports dynamic code execution. This vulnerability executes in the client browser without any server interaction.",
+    recommendation: "Always sanitize data from DOM sources before using them in potentially dangerous DOM operations like innerHTML.",
+    recommendationCode: `// UNSAFE:
+// const input = document.location.hash.substring(1);
+// document.getElementById('output').innerHTML = input;
+
+// SAFE:
+import DOMPurify from 'dompurify';
+
+function renderDOMSourceDataSafely() {
+  // Get value from DOM source (URL hash, etc)
+  const input = document.location.hash.substring(1);
+  
+  // Option 1: Use textContent for text-only content
+  document.getElementById('output').textContent = input;
+  
+  // Option 2: If HTML is needed, sanitize first
+  const sanitizedInput = DOMPurify.sanitize(input);
+  document.getElementById('output-html').innerHTML = sanitizedInput;
+}
+
+// When using URL fragments for navigation
+function safeFragmentNavigation() {
+  const fragment = window.location.hash.slice(1);
+  
+  // Validate against a whitelist of allowed values
+  const allowedFragments = ['home', 'about', 'contact', 'products'];
+  
+  if (allowedFragments.includes(fragment)) {
+    // Safe to use for navigation
+    showSection(fragment);
+  } else {
+    // Invalid fragment, show default section
+    showSection('home');
+  }
+}`
+  },
+
+  // Advanced Reflected XSS Detection
+  {
+    type: "reflectedXSS",
+    regex: /(?:document\.write|\.innerHTML|\.outerHTML|\.insertAdjacentHTML)\s*\([^)]*(?:location\.(?:search|hash|href|pathname)|(?:get|post)Parameter|query|url\.searchParams|request\.query)/gi,
+    severity: "critical" as const,
+    title: "Reflected Cross-Site Scripting (XSS)",
+    description: "URL parameters or query strings are being directly inserted into the DOM without proper sanitization, enabling reflected XSS attacks where an attacker can craft malicious URLs that execute when visited.",
+    recommendation: "Always sanitize URL parameters before inserting them into the DOM. Use DOMPurify or similar libraries to cleanse any data from URL sources.",
+    recommendationCode: `// UNSAFE:
+// document.getElementById('content').innerHTML = new URLSearchParams(window.location.search).get('message');
+
+// SAFE:
+import DOMPurify from 'dompurify';
+
+function displayUrlParameter(paramName, targetElementId) {
+  const value = new URLSearchParams(window.location.search).get(paramName);
+  
+  if (value) {
+    const sanitized = DOMPurify.sanitize(value);
+    document.getElementById(targetElementId).textContent = sanitized; // Use textContent instead of innerHTML
+    
+    // If HTML rendering is absolutely required:
+    // document.getElementById(targetElementId).innerHTML = DOMPurify.sanitize(value);
+  }
+}
+
+// Usage:
+displayUrlParameter('message', 'content');`
+  },
+  
+  // Advanced Stored XSS Detection
+  {
+    type: "storedXSS",
+    regex: /(?:document\.write|\.innerHTML|\.outerHTML|\.insertAdjacentHTML)\s*\([^)]*(?:localStorage|sessionStorage|indexedDB|database|storage|\.json\(\)|fetch|axios|ajax)/gi,
+    severity: "critical" as const,
+    title: "Stored Cross-Site Scripting (XSS)",
+    description: "Data from storage (localStorage, API responses, etc.) is being inserted directly into the DOM without proper sanitization, enabling stored XSS attacks where malicious content persists across sessions.",
+    recommendation: "Always sanitize data from storage before inserting it into the DOM. Use DOMPurify or other sanitization libraries to clean the data.",
+    recommendationCode: `// UNSAFE:
+// const userData = JSON.parse(localStorage.getItem('userData'));
+// document.getElementById('profile').innerHTML = userData.bio;
+
+// SAFE:
+import DOMPurify from 'dompurify';
+
+function displayUserProfile() {
+  try {
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    
+    if (userData && userData.bio) {
+      // Option 1: Use textContent if formatted HTML is not needed
+      document.getElementById('profile').textContent = userData.bio;
+      
+      // Option 2: If HTML formatting is required, sanitize first
+      // document.getElementById('profile').innerHTML = DOMPurify.sanitize(userData.bio);
+    }
+  } catch (error) {
+    console.error('Error displaying user profile:', error);
+  }
+}
+
+// For API data:
+async function displayUserComments() {
+  try {
+    const response = await fetch('/api/comments');
+    const comments = await response.json();
+    
+    const commentsContainer = document.getElementById('comments');
+    commentsContainer.innerHTML = ''; // Clear existing content
+    
+    comments.forEach(comment => {
+      const commentElement = document.createElement('div');
+      // Sanitize the comment text
+      commentElement.innerHTML = DOMPurify.sanitize(comment.text);
+      commentsContainer.appendChild(commentElement);
+    });
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+  }
+}`
+  },
   // Template Literal Injection with unescaped parameters
   {
     type: "templateLiteralInjection",
