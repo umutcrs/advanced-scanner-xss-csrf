@@ -4843,6 +4843,144 @@ if (secureForm) {
   secureForm.submit();
 }`
   },
+  
+  // CSRF via dynamically created HTML Forms without SameSite cookies
+  {
+    type: "dynamicFormCSRFVulnerability",
+    regex: /document\.createElement\(\s*['"]form['"]\s*\)[^}]*?(?:\.submit\(\)|\.appendChild\([^}]*?\.submit\(\))/gi,
+    skipPattern: /SameSite=(?:Strict|Lax)|csrf_token|anti_csrf|\.appendChild\([^}]*?name\s*[=:]\s*['"](?:csrf|xsrf|token)['"]|headers\s*[=:]\s*[^]*['"](?:X-CSRF-Token|X-XSRF-Token|CSRF-Token)['"]:/i,
+    severity: "critical" as const,
+    title: "Dynamic Form Creation Without CSRF Protection",
+    description: "This code creates HTML forms dynamically and submits them without proper CSRF protection mechanisms like tokens or SameSite cookie attributes, allowing cross-site request forgery attacks.",
+    recommendation: "Use SameSite=Strict or SameSite=Lax cookie attributes alongside CSRF tokens. For dynamically created forms, always append CSRF token fields.",
+    recommendationCode: `// UNSAFE - Dynamic form without protection:
+// const form = document.createElement('form');
+// form.method = 'POST';
+// form.action = '/api/sensitive-action';
+// document.body.appendChild(form);
+// form.submit();
+
+// SAFE - Proper CSRF protection for dynamic forms:
+function createProtectedForm(action, method = 'POST') {
+  // 1. Ensure your cookies use SameSite attribute (server-side)
+  // Set-Cookie: sessionid=abc123; SameSite=Strict; Secure; HttpOnly
+  
+  // 2. Always include anti-CSRF token
+  const form = document.createElement('form');
+  form.method = method;
+  form.action = action;
+  
+  // Get token from meta tag (previously embedded by server)
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  
+  // Add token field
+  const tokenInput = document.createElement('input');
+  tokenInput.type = 'hidden';
+  tokenInput.name = 'csrf_token';
+  tokenInput.value = csrfToken;
+  form.appendChild(tokenInput);
+  
+  // 3. Validate origin before submission
+  if (window.location.origin !== new URL(action, window.location.origin).origin) {
+    console.error('Cross-origin form submission blocked');
+    return null;
+  }
+  
+  return form;
+}`
+  },
+
+  // CSRF via XMLHttpRequest without protection
+  {
+    type: "xhrCSRFVulnerability",
+    regex: /(?:new XMLHttpRequest\(\)|XMLHttpRequest\(\))[^}]*?\.open\(\s*['"]POST['"][^}]*?\.send\([^}]*?\)/gi,
+    skipPattern: /(?:['"]X-CSRF-Token['"]|['"]CSRF-Token['"]|['"]X-XSRF-Token['"])[^}]*?(?:setRequestHeader|headers)/i,
+    severity: "high" as const,
+    title: "XHR Request Without CSRF Protection",
+    description: "This code makes XMLHttpRequest POST calls without including CSRF protection headers, making it vulnerable to cross-site request forgery attacks when cookies are used for authentication.",
+    recommendation: "Always include CSRF tokens in custom headers for XMLHttpRequest POST calls.",
+    recommendationCode: `// UNSAFE - XHR without CSRF protection:
+// const xhr = new XMLHttpRequest();
+// xhr.open('POST', '/api/user/update', true);
+// xhr.withCredentials = true;
+// xhr.setRequestHeader('Content-Type', 'application/json');
+// xhr.send(JSON.stringify({ name: 'New Name' }));
+
+// SAFE - XHR with CSRF protection:
+function securePOST(url, data) {
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', url, true);
+  
+  // Get CSRF token from meta tag (server-embedded)
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  
+  // Set CSRF header
+  xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  
+  // Optional: check if same origin
+  if (new URL(url, window.location.origin).origin !== window.location.origin) {
+    console.error('Cross-origin XHR blocked');
+    return;
+  }
+  
+  xhr.send(JSON.stringify(data));
+  
+  return xhr;
+}`
+  },
+  
+  // CSRF via state-changing GET requests
+  {
+    type: "getStateChangeCSRFVulnerability",
+    regex: /(?:fetch|axios\.get|xhr\.open\(\s*['"]GET['"])[^}]*?\/(?:delete|remove|update|change|modify|set|add|create|enable|disable)[^}]*?['"]\)/gi,
+    skipPattern: /['"](?:X-CSRF-Token|CSRF-Token|X-XSRF-Token)['"]:|[?&](?:csrf_token|xsrf_token|token)=/i,
+    severity: "high" as const,
+    title: "State-Changing GET Request Without CSRF Protection",
+    description: "This code uses GET requests that appear to modify server state, which is vulnerable to CSRF attacks via simple image tags, links, or redirects. GET requests should be idempotent and not modify state.",
+    recommendation: "Use POST/PUT/DELETE for state changes with CSRF tokens, never GET. Rename endpoints to align with proper HTTP semantics.",
+    recommendationCode: `// UNSAFE - State-changing GET request:
+// fetch('/api/user/delete?id=123')
+//   .then(response => console.log('User deleted'));
+//
+// <!-- Can be exploited with: -->
+// <img src="https://yourapp.com/api/user/delete?id=123" style="display:none">
+
+// SAFE - Use proper HTTP methods with CSRF protection:
+async function deleteUser(userId) {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  
+  const response = await fetch('/api/user/' + userId, {
+    method: 'DELETE',
+    headers: {
+      'X-CSRF-Token': csrfToken
+    },
+    credentials: 'same-origin'
+  });
+  
+  return response.json();
+}
+
+// ALTERNATIVELY - For legacy systems, use POST with action parameter:
+async function safeStateChange(action, params) {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  
+  const response = await fetch('/api/actions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      action: action,  // e.g., "deleteUser"
+      params: params   // e.g., { id: 123 }
+    })
+  });
+  
+  return response.json();
+}`
+  },
 
   // Cookie without secure and HttpOnly flags
   {
@@ -4893,5 +5031,261 @@ setSecureCookie('sessionId', 'abc123', {
 // NOTE: For sensitive cookies like session IDs, they should be set server-side
 // with the HttpOnly flag, which prevents JavaScript access
 */`
+  },
+
+  // CSRF via missing SameSite cookie attribute
+  {
+    type: "missingSameSiteCookieAttribute",
+    regex: /(?:document\.cookie\s*=\s*|app\.use\([^)]*cookie[^)]*{[^}]*?(?!sameSite:))|(?:Set-Cookie:[^;]*?(?!SameSite=))/gi,
+    skipPattern: /SameSite\s*[:=]\s*['"](?:strict|lax)['"]/i,
+    severity: "high" as const,
+    title: "Missing SameSite Cookie Attribute",
+    description: "This code sets or configures cookies without specifying the SameSite attribute, which is a critical defense against CSRF attacks. Modern browsers require explicit SameSite settings.",
+    recommendation: "Always set the SameSite attribute to 'Strict' or 'Lax' for all cookies, especially authentication cookies.",
+    recommendationCode: `// UNSAFE - Missing SameSite attribute
+// document.cookie = "sessionId=abc123; path=/; secure";
+// 
+// app.use(cookieSession({
+//   secret: 'secret-key',
+//   maxAge: 24 * 60 * 60 * 1000 // 24 hours
+// }));
+
+// SAFE - With SameSite (client-side)
+document.cookie = "userPrefs=theme:dark; path=/; secure; SameSite=Lax";
+
+// SAFE - With SameSite (server-side)
+app.use(cookieSession({
+  name: 'session',
+  secret: 'keyboard cat',
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  sameSite: 'strict',          // Prevent CSRF
+  secure: true,                // HTTPS only
+  httpOnly: true               // Inaccessible to JavaScript
+}));
+
+// For Express.js response:
+res.cookie('sessionId', 'abc123', {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'strict'
+});`
+  },
+
+  // CSRF via Double Submit Cookie Pattern vulnerability
+  {
+    type: "improperDoubleSubmitCookieImplementation",
+    regex: /function\s+(?:validateCSRF|validateToken|checkToken|verifyToken)[^{]*{[^}]*?(?=return|if)\s*(?!compare|crypto\.timingSafeEqual|===|constant-time|bcrypt\.compare|safeCompare)[^}]*?(?:===|==|!=|!==)/gi,
+    severity: "high" as const,
+    title: "Insecure CSRF Token Validation",
+    description: "This code implements CSRF token validation without using constant-time comparison, making it vulnerable to timing attacks that could bypass the protection.",
+    recommendation: "Always use constant-time comparison functions when validating security tokens to prevent timing attacks.",
+    recommendationCode: `// UNSAFE - Regular string comparison vulnerable to timing attacks
+// function validateCSRFToken(req) {
+//   const cookieToken = req.cookies.csrf;
+//   const headerToken = req.headers['x-csrf-token'];
+//   return cookieToken === headerToken; // Timing attack vulnerability
+// }
+
+// SAFE - Use constant-time comparison
+const crypto = require('crypto');
+
+function validateCSRFToken(req) {
+  const cookieToken = req.cookies.csrf;
+  const headerToken = req.headers['x-csrf-token'];
+  
+  // Validate inputs exist
+  if (!cookieToken || !headerToken) {
+    return false;
+  }
+  
+  // Use constant-time comparison to prevent timing attacks
+  // This is critical for security token validation
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(cookieToken, 'utf8'),
+      Buffer.from(headerToken, 'utf8')
+    );
+  } catch (e) {
+    console.error('CSRF validation error:', e);
+    return false;
+  }
+}
+
+// For Express middleware
+function csrfProtection(req, res, next) {
+  if (req.method === 'GET') {
+    // Generate new token for GET requests
+    const newToken = crypto.randomBytes(32).toString('hex');
+    res.cookie('csrf', newToken, { 
+      httpOnly: true, 
+      secure: true,
+      sameSite: 'strict'
+    });
+    res.locals.csrfToken = newToken; // Available for templates
+    next();
+  } else {
+    // Validate token for state-changing requests (POST, PUT, DELETE)
+    if (validateCSRFToken(req)) {
+      next();
+    } else {
+      res.status(403).send('CSRF token validation failed');
+    }
+  }
+}`
+  },
+
+  // CSRF via JWT in localStorage
+  {
+    type: "jwtInLocalStorage",
+    regex: /localStorage\.setItem\(\s*['"](?:token|auth|jwt|access)['"][^;]*\)|localStorage\[['"](?:token|auth|jwt|access)['"]\]\s*=/gi,
+    severity: "medium" as const,
+    title: "JWT Stored in localStorage",
+    description: "This code stores authentication tokens (JWT) in localStorage, which is accessible to any JavaScript running on the same origin, making them vulnerable to XSS-based CSRF attacks.",
+    recommendation: "Store authentication tokens in HttpOnly cookies with SameSite=Strict, not in localStorage.",
+    recommendationCode: `// UNSAFE - Storing tokens in localStorage
+// localStorage.setItem('token', jwtResponse.token);
+// localStorage['authToken'] = response.token;
+//
+// fetch('/api/data', {
+//   headers: {
+//     'Authorization': 'Bearer ' + localStorage.getItem('token')
+//   }
+// });
+
+// SAFE - Using HttpOnly cookies instead
+// Server-side (Express example):
+app.post('/api/login', (req, res) => {
+  // Authenticate user...
+  const token = generateJWT(user);
+  
+  // Set token as HttpOnly cookie
+  res.cookie('auth', token, {
+    httpOnly: true,   // Not accessible via JavaScript
+    secure: true,     // HTTPS only
+    sameSite: 'strict', // CSRF protection
+    maxAge: 3600000   // 1 hour
+  });
+  
+  res.json({ success: true, user: { id: user.id, name: user.name } });
+});
+
+// Client-side:
+// No need to manually attach token, browser sends cookies automatically
+fetch('/api/data', {
+  credentials: 'same-origin' // Include cookies
+})
+.then(response => response.json())
+.then(data => console.log(data));`
+  },
+
+  // CSRF protection bypass via Clickjacking
+  {
+    type: "missingFrameProtection",
+    regex: /app\.use\([^)]*?helmet[^)]*?\)/gi,
+    skipPattern: /frameGuard|X-Frame-Options|frameguard|Content-Security-Policy[^:]*?frame-ancestors/i,
+    severity: "medium" as const,
+    title: "Missing Clickjacking Protection",
+    description: "This application uses Helmet.js but may not have frame protection enabled, making it vulnerable to clickjacking attacks that can lead to CSRF.",
+    recommendation: "Enable frame protection headers (X-Frame-Options or CSP frame-ancestors) to prevent your site from being embedded in iframes.",
+    recommendationCode: `// UNSAFE - Helmet without explicit frame protection
+// app.use(helmet());  // Default config may not include all protections
+
+// SAFE - Explicit frame protection with Helmet
+const helmet = require('helmet');
+
+app.use(
+  helmet({
+    // Prevent site from being framed (clickjacking protection)
+    frameguard: {
+      action: 'deny'  // Never allow framing
+    },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        // Modern alternative to X-Frame-Options
+        frameAncestors: ["'none'"]
+      }
+    }
+  })
+);
+
+// ALTERNATIVELY - Set headers manually
+app.use((req, res, next) => {
+  // Prevent site from being framed
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Modern CSP approach (in addition to X-Frame-Options)
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors 'none';"
+  );
+  next();
+});`
+  },
+
+  // CSRF via Token Reuse
+  {
+    type: "csrfTokenReuse",
+    regex: /const\s+(?:csrf|xsrf|token)\s*=\s*(?:generateToken|crypto\.randomBytes|uuid|uuidv4|genToken)[^;]*;[^}]*?(?:sessionStorage|localStorage)\.setItem\([^)]*?(?:csrf|xsrf|token)[^)]*?\)/gi,
+    skipPattern: /one-time|singleUse|invalidateToken|delete\s+session\.csrf/i,
+    severity: "medium" as const,
+    title: "CSRF Token Reuse Vulnerability",
+    description: "This code generates a CSRF token but doesn't implement a mechanism to ensure tokens are single-use only, allowing potential token replay attacks.",
+    recommendation: "Implement per-request or per-session tokens with server-side validation and proper invalidation after use.",
+    recommendationCode: `// UNSAFE - Reusable token without invalidation
+// const csrfToken = crypto.randomBytes(16).toString('hex');
+// localStorage.setItem('csrfToken', csrfToken);
+
+// SAFE - Server-side implementation with per-request tokens
+// Server (Express.js example):
+app.use((req, res, next) => {
+  // Skip for non-HTML responses or non-GET requests
+  if (req.method !== 'GET' || !req.accepts('html')) {
+    return next();
+  }
+  
+  // Generate unique token per request
+  const token = crypto.randomBytes(32).toString('hex');
+  
+  // Store token in session with timestamp
+  req.session.csrfTokens = req.session.csrfTokens || {};
+  req.session.csrfTokens[token] = {
+    created: Date.now(),
+    used: false
+  };
+  
+  // Clean up old tokens (>15 min)
+  const fifteenMinutesAgo = Date.now() - (15 * 60 * 1000);
+  for (const oldToken in req.session.csrfTokens) {
+    if (req.session.csrfTokens[oldToken].created < fifteenMinutesAgo) {
+      delete req.session.csrfTokens[oldToken];
+    }
+  }
+  
+  // Set token for templates
+  res.locals.csrfToken = token;
+  next();
+});
+
+// CSRF validation middleware
+function validateCsrf(req, res, next) {
+  const token = req.body._csrf || req.headers['x-csrf-token'];
+  
+  if (!token || 
+      !req.session.csrfTokens || 
+      !req.session.csrfTokens[token] ||
+      req.session.csrfTokens[token].used) {
+    return res.status(403).send('Invalid CSRF token');
+  }
+  
+  // Mark token as used
+  req.session.csrfTokens[token].used = true;
+  next();
+}
+
+// Apply to all state-changing routes
+app.post('/api/*', validateCsrf);
+app.put('/api/*', validateCsrf);
+app.delete('/api/*', validateCsrf);`
   }
 ];
