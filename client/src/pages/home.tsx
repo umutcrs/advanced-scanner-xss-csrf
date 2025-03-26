@@ -79,7 +79,11 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <CodeInputPanel onScan={handleScan} isScanning={isScanning} />
+          <CodeInputPanel 
+            onScan={handleScan} 
+            isScanning={isScanning} 
+            initialCode={currentCode}
+          />
           <ResultsPanel 
             results={scanResults} 
             isScanning={isScanning} 

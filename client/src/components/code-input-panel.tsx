@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +7,7 @@ import CodeEditor from "@/lib/code-editor";
 interface CodeInputPanelProps {
   onScan: (code: string, fileName?: string) => void;
   isScanning: boolean;
+  initialCode?: string;
 }
 
 const SAMPLE_CODE = `// Example vulnerable code
@@ -37,11 +38,18 @@ function calculateExpression() {
   return result;
 }`;
 
-export default function CodeInputPanel({ onScan, isScanning }: CodeInputPanelProps) {
-  const [code, setCode] = useState(SAMPLE_CODE);
+export default function CodeInputPanel({ onScan, isScanning, initialCode }: CodeInputPanelProps) {
+  const [code, setCode] = useState(initialCode || SAMPLE_CODE);
   const [fileName, setFileName] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  
+  // Update code when initialCode changes (for code fixes)
+  useEffect(() => {
+    if (initialCode) {
+      setCode(initialCode);
+    }
+  }, [initialCode]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
