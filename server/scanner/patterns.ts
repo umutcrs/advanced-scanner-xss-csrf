@@ -3844,7 +3844,7 @@ function sendSafeMessage(socket, messageText) {
   // WebSocket Raw Message Injection
   {
     type: "webSocketRawInjection",
-    regex: /ws\.send\s*\(\s*[\`'"]+.*?\$\{.*?message.*?\}/g,
+    regex: /[`'"].*?\$\{(?:\w+)\}.*?[`'"]/g,
     severity: "high" as const,
     title: "WebSocket Raw Message Injection",
     description: "Sending unsanitized user input via WebSockets using string interpolation can lead to XSS vulnerabilities when the receiving end renders the content.",
