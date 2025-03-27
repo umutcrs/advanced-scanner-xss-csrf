@@ -9,6 +9,16 @@ import {
 } from "./utils";
 import { v4 as uuidv4 } from "uuid";
 
+// Tarayıcı uzantıları için güvenli API'ler
+const browserExtensionSafeAPIs = [
+  "chrome.runtime", 
+  "browser.runtime", 
+  "chrome.extension", 
+  "browser.extension", 
+  "chrome.tabs", 
+  "browser.tabs"
+];
+
 // ES Module dışa aktarım whitelist - Bu ifadeler kesinlikle güvenli olarak kabul edilir
 const moduleExportsWhitelist = `Object.defineProperty(exports, "__esModule", { value: true });
 Object.defineProperty(module.exports, "__esModule", { value: true });
@@ -24,6 +34,8 @@ Object.defineProperty(r, "__esModule", { value: true });
 Object.defineProperty(t, "__esModule", { value: !0 });
 Object.defineProperty(e, "__esModule", { value: !0 });
 Object.defineProperty(i, "__esModule", { value: !0 });`;
+
+// Bu liste daha önce tanımlandı - çift tanımlamayı önlemek için kaldırıldı
 
 // Confidence threshold - vulnerabilities with lower scores will be excluded
 // Fine-tuned thresholds for optimal true/false positive balance
@@ -89,6 +101,9 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
       };
     }
   }
+  
+  // Check for browser extension APIs
+  const isBrowserExtension = browserExtensionSafeAPIs.some(api => code.includes(api));
   
   // Validate and prepare the code for scanning
   const preparedCode = prepareCodeForScanning(code);
@@ -185,13 +200,27 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   }
   
   // Second pass: Analyze data flow to reduce false positives
-  const validatedIndices = analyzeDataFlow(
-    preparedCode, 
-    potentialVulnerabilities.map(v => ({ 
+  // Browser extension kodlarında script oluşturma için validation ağırlığını düşür
+  const adjustedVulnerabilities = potentialVulnerabilities
+    .filter(v => {
+      // Chrome extension API kullanılan kodlarda script alakalı savunmasızlıkları filtrele
+      if (isBrowserExtension && 
+          (v.type === "scriptCreation" || v.type === "scriptElement" || 
+          v.type === "scriptSrc" || v.type === "scriptSrcAssignment")) {
+        // Bu kod chrome.runtime.* API'leri kullanıyor, bu nedenle güvenli kabul edilebilir
+        return false; // Filtreleme yaparak çıkar
+      }
+      return true; // Diğer tüm durumları koru
+    })
+    .map(v => ({ 
       index: v.index, 
       length: v.length, 
       type: v.type 
     }))
+  
+  const validatedIndices = analyzeDataFlow(
+    preparedCode, 
+    adjustedVulnerabilities
   );
   
   // Extract the validated vulnerabilities
@@ -369,7 +398,7 @@ function prepareCodeForScanning(code: string): string {
   
   // Extract JavaScript code from template literals for better CSRF detection
   const templateStrings: string[] = [];
-  preparedCode = preparedCode.replace(/`([\s\S]*?)`/g, (match, content) => {
+  preparedCode = preparedCode.replace(/`([\s\S]*?)`/g, function(match, content) {
     // Extract any JavaScript from HTML templates
     const extractedJs = extractJsFromHtml(content);
     if (extractedJs) {

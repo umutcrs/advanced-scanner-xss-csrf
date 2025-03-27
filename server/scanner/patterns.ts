@@ -1149,6 +1149,8 @@ function createSafeElement(tagName) {
   {
     type: "scriptElement",
     regex: /document\.createElement\s*\(\s*['"]script['"]\s*\)/g,
+    // Chrome extension API ve güvenli kaynaklar için scriprt oluşumlarını atla
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL|['"]https?:\/\/[^'"]+['"]|allowedSources\.includes/,
     severity: "medium" as const,
     title: "Dynamic Script Creation",
     description: "Dynamically creating script elements and setting their content or src attribute can execute malicious code.",
@@ -1706,6 +1708,8 @@ document.body.appendChild(clone);`
   {
     type: "dynamicScriptInjection",
     regex: /document\.write\s*\(\s*['"]<script[^>]*>['"]\s*\+\s*([^+]*)\s*\+\s*['"]<\/script>['"]\s*\)/g,
+    // Chrome extension güvenli script enjeksiyon davranışını atla
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL/,
     severity: "critical" as const,
     title: "Dynamic Script Tag Injection",
     description: "Creating script tags with unvalidated content allows direct code execution regardless of the context.",
