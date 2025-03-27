@@ -568,8 +568,8 @@ function validateServerSide(input) {
   {
     type: "scriptSrcAssignment",
     regex: /\b(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
-    // Skip browser extension API patterns - they're safe
-    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
+    // Skip browser extension API patterns and integrity check patterns - they're safe
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|integrity|crossOrigin|https/i,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
