@@ -26,6 +26,7 @@ export const scanPatterns: ScanPattern[] = [
     // SADECE tehlikeli prototip manipülasyonlarını tespit et - gerçekten zararlı manipülasyonlar
     regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|constructor\.prototype)/gi,
     // Module exports için pattern skip - false positive kontrolü
+    // Object.prototype.hasOwnProperty.call is a secure pattern to avoid prototype pollution
     skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']/i,
     severity: "high" as const,
     title: "Prototype Pollution Vulnerability",
@@ -1219,6 +1220,8 @@ function executeAllowedOperation(operationName, ...args) {
   {
     type: "postMessageOrigin",
     regex: /addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)\s*\{(?:[^{}]|(?:\{[^{}]*\}))*\}|[^,)]+)(?!\s*,[^,]+\.origin)/g,
+    // Skip browser extension message patterns
+    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/i,
     severity: "medium" as const,
     title: "postMessage Without Origin Check",
     description: "Handling postMessage events without verifying the origin can lead to XSS attacks from malicious websites.",

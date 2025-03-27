@@ -488,6 +488,35 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
     "chrome.tabs", "browser.tabs", "chrome.storage", "browser.storage"
   ];
   
+  // Browser extension pattern detection for Object.prototype and addEventListener
+  if (vulnType === "prototypeManipulation" || vulnType === "postMessageOrigin") {
+    // Check if this is a browser extension content script
+    if (code.includes(';(function ()') || code.includes('(function()')) {
+      // Look for iife pattern commonly used in extension content scripts
+      const surroundingCode = code.substring(
+        Math.max(0, match.index - 200), 
+        Math.min(code.length, match.index + match[0].length + 200)
+      );
+      
+      // Is this Object.prototype.hasOwnProperty.call pattern? (actually secure)
+      if (vulnType === "prototypeManipulation" && 
+          surroundingCode.includes("Object.prototype.hasOwnProperty.call")) {
+        return 0.1; // This is a safe usage, not a vulnerability
+      }
+      
+      // Is this a content script message handler without origin checking?
+      if (vulnType === "postMessageOrigin") {
+        // Check for specific extension message handling patterns
+        if (surroundingCode.includes("const onMessage = ({") || 
+            surroundingCode.includes("function onMessage") ||
+            surroundingCode.includes("!data.") ||
+            surroundingCode.includes("data.wappalyzer")) {
+          return 0.1; // This is a browser extension pattern, likely safe
+        }
+      }
+    }
+  }
+  
   // Chrome uzantısı API kullanıldığında script oluşturma ve src atama savunmasızlıkları için
   if (["scriptCreation", "scriptSrc", "scriptSrcAssignment", "scriptElement"].includes(vulnType)) {
     // Script etiketine chrome.runtime.getURL veya benzer bir API ile erişim örneğini kontrol et
