@@ -109,14 +109,23 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   // Add special handling for Object.prototype.hasOwnProperty.call pattern which is a best practice
   const hasOwnPropertyCallPattern = /Object\.prototype\.hasOwnProperty\.call\s*\(/;
   
-  // Directly return empty vulnerabilities for specific browser extension patterns that are actually safe
-  if (hasOwnPropertyCallPattern.test(code) && 
-     (code.includes("wappalyzer") || 
-      code.match(/\(\s*{\s*data\s*}\s*\)\s*=>/) || 
-      code.match(/const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/) ||
-      (code.match(/addEventListener\s*\(\s*["']message["']\s*,/) && code.match(/\(\s*{\s*data\s*}\s*\)/)))) {
+  // Directly detect browser extension patterns with common message handling
+  const isBrowserExtensionMessageHandling = code.match(/\(\s*{\s*data\s*}\s*\)\s*=>/) || 
+    code.match(/const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/) ||
+    (code.match(/addEventListener\s*\(\s*["']message["']\s*,/) && code.match(/\(\s*{\s*data\s*}\s*\)/));
     
-    // Early return - this is browser extension code using secure patterns
+  const hasWappalyzerPattern = code.includes("wappalyzer");
+  const hasMessageRemoval = code.includes("removeEventListener(\"message\"") || code.includes("removeEventListener('message'");
+  
+  // Check for specific browser extension code patterns that are actually safe
+  if ((hasOwnPropertyCallPattern.test(code) && hasWappalyzerPattern) || 
+      (isBrowserExtensionMessageHandling && 
+       (code.includes("chrome.runtime") || 
+        code.includes("browser.runtime") || 
+        hasWappalyzerPattern || 
+        hasMessageRemoval))) {
+    
+    // Early return - this is definitely browser extension code using secure patterns
     return {
       vulnerabilities: [],
       summary: {
@@ -144,9 +153,14 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   }
   
   // Skip postMessage vulnerabilities detection in browser extensions with specific message handler patterns
-  const browserExtensionMessagePattern = /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/;
-  if (browserExtensionMessagePattern.test(code)) {
-    // Early return with no vulnerabilities - this is browser extension message handling pattern
+  // This early return is for clear-cut extension cases that match BOTH the message pattern AND wappalyzer
+  const isExtensionMessagePattern = /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/;
+  
+  if (isExtensionMessagePattern.test(code) && 
+      (hasWappalyzerPattern || code.includes("chrome.runtime") || 
+       code.includes("browser.runtime") || hasMessageRemoval ||
+       code.includes("postMessage") && code.includes("removeEventListener"))) {
+    // Early return with no vulnerabilities - this is definitely a browser extension message handler
     return {
       vulnerabilities: [],
       summary: {

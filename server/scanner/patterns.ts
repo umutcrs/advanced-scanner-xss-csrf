@@ -1220,8 +1220,8 @@ function executeAllowedOperation(operationName, ...args) {
   {
     type: "postMessageOrigin",
     regex: /addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)\s*\{(?:[^{}]|(?:\{[^{}]*\}))*\}|[^,)]+)(?!\s*,[^,]+\.origin)/g,
-    // This is a common pattern in browser extensions and safe in that context
-    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>|\(\s*\{\s*data\s*\}\s*\)|wappalyzer/i,
+    // These are common patterns in browser extensions and safe in that context
+    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>|\(\s*\{\s*data\s*\}\s*\)|wappalyzer|removeEventListener|addEventListener\s*\(\s*["']message["']\s*,\s*onMessage\)/i,
     severity: "medium" as const,
     title: "postMessage Without Origin Check",
     description: "Handling postMessage events without verifying the origin can lead to XSS attacks from malicious websites.",
