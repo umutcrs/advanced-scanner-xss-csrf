@@ -59,11 +59,18 @@ app.use((req, res, next) => {
   // Serve the app on port 3000 for deployment compatibility
   // this serves both the API and the client.
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, "127.0.0.1", () => {
     log(`serving on port ${port}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      const alternativePort = port + 1;
+      log(`Port ${port} is in use, trying alternative port ${alternativePort}`);
+      server.listen(alternativePort, "127.0.0.1", () => {
+        log(`serving on alternative port ${alternativePort}`);
+      });
+    } else {
+      throw err;
+    }
   });
 })();
+
