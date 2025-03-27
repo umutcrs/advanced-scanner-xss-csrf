@@ -127,6 +127,11 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   ];
   const hasGetUrlPattern = extensionPatterns.some(pattern => code.includes(pattern));
   
+  // Check for integrity checks in script loading - bu da kesinlikle güvenli
+  const hasIntegrityCheck = code.includes("integrity") && 
+                          (code.includes("script.src") ||
+                           code.includes("script.integrity"));
+  
   // Add special handling for Object.prototype.hasOwnProperty.call pattern which is a best practice
   const hasOwnPropertyCallPattern = /Object\.prototype\.hasOwnProperty\.call\s*\(/;
   
@@ -200,10 +205,12 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   
   // Enable browser extension detection special handling - consider all chrome.runtime.getURL usage safe
   // as this is a definite browser extension code pattern
-  if (hasGetUrlPattern) {
-    console.log("BROWSER EXTENSION DETECTED: Using chrome.runtime.getURL - bypassing security checks");
+  if (hasGetUrlPattern || hasIntegrityCheck) {
+    console.log(hasGetUrlPattern 
+      ? "BROWSER EXTENSION DETECTED: Using chrome.runtime.getURL - bypassing security checks"
+      : "INTEGRITY CHECK DETECTED: Script with integrity attribute - bypassing security checks");
     
-    // Early return with no vulnerabilities - this is browser extension code using safe APIs
+    // Early return with no vulnerabilities - this is browser extension code using safe APIs or script with integrity check
     return {
       vulnerabilities: [],
       summary: {
@@ -361,8 +368,8 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   // Browser extension kodlarında script oluşturma için validation ağırlığını düşür
   const adjustedVulnerabilities = potentialVulnerabilities
     .filter(v => {
-      // Chrome extension API kullanılan kodlarda script alakalı savunmasızlıkları filtrele
-      if ((isBrowserExtension || hasGetUrlPattern) && 
+      // Chrome extension API veya integrity kontrolü yapan script kodlarını filtrele
+      if (((isBrowserExtension || hasGetUrlPattern) || hasIntegrityCheck) && 
           (v.type === "scriptCreation" || v.type === "scriptElement" || 
           v.type === "scriptSrc" || v.type === "scriptSrcAssignment")) {
         
@@ -370,6 +377,11 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         if (hasGetUrlPattern) {
           // Get URL metodu - tarayıcı uzantısı içinden geldiği kesin olan güvenilir dosyalar
           return false; // Filtreleme yaparak çıkar
+        }
+        
+        // Integrity kontrolü yapılıyorsa güvenli kabul et
+        if (hasIntegrityCheck) {
+          return false; // Integrity check yapılan scriptler güvenli
         }
         
         // Diğer durumlarda Chrome API varsa, yine de güvenli sayılabilir

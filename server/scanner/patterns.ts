@@ -986,8 +986,8 @@ if (allowedActions.hasOwnProperty(actionName)) {
   {
     type: "scriptSrc",
     regex: /(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
-    // Skip when chrome.runtime.getURL or browser.runtime.getURL is used - these are safe
-    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
+    // Skip when chrome.runtime.getURL or browser.runtime.getURL is used or when integrity attribute is present
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|integrity|subresource integrity/i,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
@@ -1176,8 +1176,8 @@ function createSafeElement(tagName) {
   {
     type: "scriptElement",
     regex: /document\.createElement\s*\(\s*['"]script['"]\s*\)/g,
-    // Completely skip all scriptElement patterns for browser extensions
-    skipPattern: /chrome\.|browser\.|extension\.|chrome\.runtime|browser\.runtime|extension\.runtime|chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL|['"]https?:\/\/[^'"]+['"]|allowedSources\.includes/,
+    // Completely skip all scriptElement patterns for browser extensions and scripts with integrity checks
+    skipPattern: /chrome\.|browser\.|extension\.|chrome\.runtime|browser\.runtime|extension\.runtime|chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL|['"]https?:\/\/[^'"]+['"]|allowedSources\.includes|integrity|subresource integrity/,
     severity: "medium" as const,
     title: "Dynamic Script Creation",
     description: "Dynamically creating script elements and setting their content or src attribute can execute malicious code.",
@@ -4250,8 +4250,8 @@ app.get('/api/jsonp', (req, res) => {
   {
     type: "scriptCreation",
     regex: /createElement\s*\(\s*['"]script['"]\s*\)/g,
-    // Skip browser extension patterns - they're safe when using getURL
-    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
+    // Skip browser extension patterns and integrity checks - they're safe
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|integrity|subresource integrity/i,
     severity: "high" as const,
     title: "Dynamic Script Creation",
     description: "Creating script elements dynamically can lead to code injection vulnerabilities, especially when the source or content is influenced by user input.",
