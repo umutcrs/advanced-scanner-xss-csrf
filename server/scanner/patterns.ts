@@ -14,10 +14,10 @@ export const scanPatterns: ScanPattern[] = [
   // Prototype Pollution Detection - daha doğru tespit için spesifik prototype manipulasyonu desenine odaklan
   {
     type: "prototypeManipulation",
-    // SADECE tehlikeli prototip manipülasyonlarını tespit et
+    // SADECE tehlikeli prototip manipülasyonlarını tespit et - gerçekten zararlı manipülasyonlar
     regex: /Object\.(?:defineProperty|assign|setPrototypeOf)\s*\(\s*(?:Object\.prototype|__proto__|constructor\.prototype)/gi,
-    // TAMAMEN KALDIR - Bu deseni kullanma
-    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports)/i,
+    // Module exports için pattern skip - false positive kontrolü
+    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']/i,
     severity: "high" as const,
     title: "Prototype Pollution Vulnerability",
     description: "This code directly modifies object prototypes which can lead to prototype pollution attacks if input is not properly validated.",
@@ -1462,6 +1462,8 @@ element.addEventListener('click', function(event) {
   {
     type: "objectDefineProperty",
     regex: /Object\.defineProperty\s*\(\s*([^,]*),\s*([^,]*),\s*{/g,
+    // Skip module exports ve minified module exports
+    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']\s*,\s*\{[^}]*value\s*:\s*(?:true|!0)/i,
     severity: "medium" as const,
     title: "Potential Prototype Pollution via defineProperty",
     description: "Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.",

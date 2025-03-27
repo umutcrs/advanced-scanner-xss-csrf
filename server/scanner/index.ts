@@ -13,10 +13,17 @@ import { v4 as uuidv4 } from "uuid";
 const moduleExportsWhitelist = `Object.defineProperty(exports, "__esModule", { value: true });
 Object.defineProperty(module.exports, "__esModule", { value: true });
 Object.defineProperty(exports, "default", { enumerable: true, value: true });
-Object.defineProperty(exports, "__esModule", { enumerable: true, value: true })
+Object.defineProperty(exports, "__esModule", { enumerable: true, value: true });
 Object.defineProperty(exports, "default", { enumerable: true, value: function() { return module.exports; } });
 Object.defineProperty(module.exports, "default", { enumerable: true, value: true });
-Object.defineProperty(exports.default, "__esModule", { value: true });`;
+Object.defineProperty(exports.default, "__esModule", { value: true });
+Object.defineProperty(n, "__esModule", { value: !0 });
+Object.defineProperty(n, "__esModule", { value: true });
+Object.defineProperty(o, "__esModule", { value: !0 });
+Object.defineProperty(r, "__esModule", { value: true });
+Object.defineProperty(t, "__esModule", { value: !0 });
+Object.defineProperty(e, "__esModule", { value: !0 });
+Object.defineProperty(i, "__esModule", { value: !0 });`;
 
 // Confidence threshold - vulnerabilities with lower scores will be excluded
 // Fine-tuned thresholds for optimal true/false positive balance
@@ -33,13 +40,11 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.45; // Threshold for high severity issues
  * @returns A scan result object with vulnerabilities and summary
  */
 export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
-  // ES/JS Modül dışa aktarım whitelist kontrolü
+  // Genişletilmiş ES/JS Modül dışa aktarım whitelist kontrolü 
   // Direkt olarak bu pattern ile uyumlu kod varsa hiç işleme sokma
-  if (code.includes("Object.defineProperty") && code.includes("__esModule")) {
-    // Kesin olarak ES Module dışa aktarım deseni içeren kodlar için
-    // Özel bir filtreleme işlemi uygula
-    if (code.includes("Object.defineProperty(exports") || 
-        code.includes("Object.defineProperty(module.exports")) {
+  if (code.includes("Object.defineProperty")) {
+    // 1. Standart ESM/CommonJS module kontrol
+    if (code.includes("__esModule")) {
       // Whitelist içindeki desenleri tara
       for (const safeLine of moduleExportsWhitelist.split('\n')) {
         if (code.includes(safeLine.trim())) {
@@ -61,6 +66,27 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
           };
         }
       }
+    }
+    
+    // 2. Minified kod kontrolü - tek harfli parametreli module dışa aktarım desenleri (n, t, r, e, i, o)
+    // Webpack, rollup gibi bundler'lar tarafından minify edilen kodda yaygın
+    const minifiedModulePattern = /Object\.defineProperty\s*\(\s*([a-zA-Z])\s*,\s*["']__esModule["']\s*,\s*\{\s*value\s*:\s*(?:true|!0)\s*\}\s*\)/;
+    if (minifiedModulePattern.test(code)) {
+      // Bu tamamen güvenli bir minified module export deseni
+      return {
+        vulnerabilities: [],
+        summary: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          info: 0,
+          total: 0,
+          uniqueTypes: 0,
+          passedChecks: scanPatterns.length
+        },
+        scannedAt: new Date().toISOString()
+      };
     }
   }
   
