@@ -6,11 +6,15 @@ import {
   ScanResult
 } from "@shared/schema";
 import { scanJavaScriptCode } from "./scanner";
+import healthRouter from "./api/health";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // API routes for the XSS scanner
   const apiRouter = express.Router();
-
+  
+  // Health check endpoint
+  apiRouter.use("/health", healthRouter);
+  
   // Endpoint to scan JavaScript code for XSS vulnerabilities
   apiRouter.post("/scan", async (req: Request, res: Response, next: NextFunction) => {
     try {
