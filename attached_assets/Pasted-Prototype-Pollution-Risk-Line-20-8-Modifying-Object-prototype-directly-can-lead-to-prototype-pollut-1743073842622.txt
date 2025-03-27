@@ -1,0 +1,301 @@
+Prototype Pollution Risk
+Line 20:8
+
+Modifying Object.prototype directly can lead to prototype pollution attacks, enabling XSS or security bypasses.
+
+Vulnerable Code
+
+Copy
+...function getTypeOf (value) {
+  return Object.prototype.toString.call (value);
+}
+...
+Security Recommendation
+
+Copy Secure Code
+Never modify object prototypes with user input or in ways that could be influenced by user input.
+
+// DANGEROUS:
+// Object.prototype.toString = () => userControlledValue;
+// Object.assign(Object.prototype, userInputObject);
+
+// SAFE alternatives:
+// 1. Create a new object with desired properties
+const safeObj = { 
+  ...baseObject, 
+  userValue: sanitizedUserValue 
+};
+
+// 2. For mixins and utilities, use composition over inheritance
+function createEnhancedObject(baseObj, enhancements) {
+  // Create new object without modifying any prototypes
+  return Object.assign({}, baseObj, validateEnhancements(enhancements));
+}
+High
+Prototype Pollution Risk
+Line 58:5
+
+Modifying Object.prototype directly can lead to prototype pollution attacks, enabling XSS or security bypasses.
+
+Vulnerable Code
+
+Copy
+...for (const key in source) {
+  if (Object.prototype.hasOwnProperty.call (source, key)) {
+    // __proto__ ve constructor özelliklerini engelle
+    ...
+Security Recommendation
+
+Copy Secure Code
+Never modify object prototypes with user input or in ways that could be influenced by user input.
+
+// DANGEROUS:
+// Object.prototype.toString = () => userControlledValue;
+// Object.assign(Object.prototype, userInputObject);
+
+// SAFE alternatives:
+// 1. Create a new object with desired properties
+const safeObj = { 
+  ...baseObject, 
+  userValue: sanitizedUserValue 
+};
+
+// 2. For mixins and utilities, use composition over inheritance
+function createEnhancedObject(baseObj, enhancements) {
+  // Create new object without modifying any prototypes
+  return Object.assign({}, baseObj, validateEnhancements(enhancements));
+}
+Medium
+Potential Prototype Pollution via defineProperty
+Line 31:1
+
+Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.
+
+Vulnerable Code
+
+Copy
+...function defineReadOnlyProperty (obj, propName, value) {
+  Object.defineProperty (obj, propName, {
+    value: value,
+    ...
+Security Recommendation
+
+Copy Secure Code
+Validate object and property names before using defineProperty, especially with user input.
+
+// Instead of:
+// Object.defineProperty(target, userInput, { value: 'some value' });
+
+// Validate the property name first:
+function safeDefineProperty(obj, propName, descriptor) {
+  // Disallow prototype chain or constructor manipulation
+  if (propName === '__proto__' || 
+      propName === 'constructor' || 
+      propName === 'prototype') {
+    console.error('Attempted to define unsafe property:', propName);
+    return false;
+  }
+  
+  // Only allow whitelisted properties if using user input
+  const allowedProps = ['name', 'description', 'value', 'isActive'];
+  if (!allowedProps.includes(propName)) {
+    console.error('Property name not in allowed list:', propName);
+    return false;
+  }
+  
+  Object.defineProperty(obj, propName, descriptor);
+  return true;
+}
+Medium
+Potential JSON Injection
+Line 49:8
+
+Using JSON.parse on unsanitized input can lead to prototype pollution or other injection attacks.
+
+Vulnerable Code
+
+Copy
+...}
+return JSON.parse (jsonString);
+}
+...
+Security Recommendation
+
+Copy Secure Code
+Validate JSON input before parsing and consider using a safer JSON parsing library.
+
+// Before using JSON.parse:
+function safeJSONParse(data) {
+  // Check if data is a string
+  if (typeof data !== 'string') {
+    throw new Error('Invalid input: expected string');
+  }
+  
+  // Optional: Check for suspicious patterns
+  if (/\__proto__|constructor|prototype/.test(data)) {
+    throw new Error('Potentially malicious input detected');
+  }
+  
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    console.error('JSON parsing error:', e);
+    throw new Error('Invalid JSON format');
+  }
+}
+Medium
+Potentially Unsafe JSON.parse Usage
+Line 49:8
+
+Using JSON.parse with unsanitized user-controlled data can lead to prototype pollution and other injection vulnerabilities.
+
+Vulnerable Code
+
+Copy
+...}
+return JSON.parse (jsonString);
+}
+...
+Security Recommendation
+
+Copy Secure Code
+Validate JSON input before parsing and use JSON schema validation for complex structures.
+
+// UNSAFE patterns:
+// const data = JSON.parse(userInput);
+// const config = JSON.parse(localStorage.getItem('config'));
+
+// SAFER approaches:
+// Option 1: Add validation and error handling
+function safeJsonParse(jsonString, defaultValue = {}) {
+  try {
+    if (typeof jsonString !== 'string') {
+      return defaultValue;
+    }
+    
+    // Optional: simple validation for very basic JSON format
+    if (!jsonString.match(/^\s*({|\[)/)) {
+      console.error('Invalid JSON format detected');
+      return defaultValue;
+    }
+    
+    const result = JSON.parse(jsonString);
+    
+    // Simple prototype pollution protection
+    if (result && typeof result === 'object' && result.__proto__) {
+      delete result.__proto__;
+    }
+    
+    return result;
+  } catch (e) {
+    console.error('JSON parsing failed:', e);
+    return defaultValue;
+  }
+}
+
+// Option 2: Using JSON schema validation for more control
+// npm install ajv
+import Ajv from 'ajv';
+
+function validateJsonWithSchema(json, schema) {
+  const ajv = new Ajv();
+  const validate = ajv.compile(schema);
+  
+  let data;
+  try {
+    data = (typeof json === 'string') ? JSON.parse(json) : json;
+  } catch (e) {
+    console.error('Invalid JSON:', e);
+    return null;
+  }
+  
+  const valid = validate(data);
+  if (!valid) {
+    console.error('Schema validation failed:', validate.errors);
+    return null;
+  }
+  
+  return data;
+}
+
+// Usage example:
+const userSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number' },
+    name: { type: 'string' },
+    email: { type: 'string', format: 'email' }
+  },
+  required: ['id', 'name', 'email'],
+  additionalProperties: false // Prevents extra properties
+};
+
+const userData = validateJsonWithSchema(userInputJSON, userSchema);
+if (userData) {
+  // Safe to use the data
+  processUser(userData);
+}
+Medium
+Unsafe JSON Parsing
+Line 49:8
+
+Parsing JSON from untrusted sources can lead to prototype pollution or DoS attacks with carefully crafted payloads.
+
+Vulnerable Code
+
+Copy
+...}
+return JSON.parse (jsonString);
+}
+...
+Security Recommendation
+
+Copy Secure Code
+Always validate JSON structure and use a JSON schema validator before parsing sensitive data.
+
+// Import a JSON schema validator like Ajv
+import Ajv from 'ajv';
+
+// Define a schema for expected JSON structure
+const userSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number' },
+    name: { type: 'string', maxLength: 100 },
+    email: { type: 'string', format: 'email' },
+    preferences: {
+      type: 'object',
+      properties: {
+        theme: { type: 'string', enum: ['light', 'dark', 'system'] },
+        notifications: { type: 'boolean' }
+      },
+      additionalProperties: false
+    }
+  },
+  required: ['id', 'name', 'email'],
+  additionalProperties: false
+};
+
+// Safely parse and validate JSON
+function safeJsonParse(jsonString) {
+  try {
+    // First parse the JSON
+    const data = JSON.parse(jsonString);
+    
+    // Then validate against schema
+    const ajv = new Ajv();
+    const validate = ajv.compile(userSchema);
+    
+    if (validate(data)) {
+      return data;
+    } else {
+      console.error('Invalid data structure:', validate.errors);
+      return null;
+    }
+  } catch (e) {
+    console.error('JSON parsing error:', e);
+    return null;
+  }
+}
+GitHub
+© 2025 JavaScript XSS Scanner. All rights reserved.

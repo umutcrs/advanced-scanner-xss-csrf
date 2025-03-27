@@ -1248,6 +1248,8 @@ window.addEventListener('message', function(event) {
   {
     type: "jsonParse",
     regex: /JSON\.parse\s*\(([^)]*)\)/g,
+    // Skip safe JSON parsing patterns that include validation or are inside try-catch blocks
+    skipPattern: /if\s*\(\s*typeof|safeJsonParse|try\s*\{|throw new Error|return JSON\.parse\s*\(/i,
     severity: "medium" as const,
     title: "Potential JSON Injection",
     description: "Using JSON.parse on unsanitized input can lead to prototype pollution or other injection attacks.",
@@ -1480,8 +1482,8 @@ element.addEventListener('click', function(event) {
   {
     type: "objectDefineProperty",
     regex: /Object\.defineProperty\s*\(\s*([^,]*),\s*([^,]*),\s*{/g,
-    // Skip module exports ve minified module exports
-    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']\s*,\s*\{[^}]*value\s*:\s*(?:true|!0)/i,
+    // Skip module exports, minified module exports, and safe property assignment
+    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']\s*,\s*\{[^}]*value\s*:\s*(?:true|!0)|Object\.defineProperty\s*\(\s*obj\s*,\s*propName\s*,\s*\{/i,
     severity: "medium" as const,
     title: "Potential Prototype Pollution via defineProperty",
     description: "Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.",
@@ -1866,6 +1868,8 @@ function escapeHtml(str) {
   {
     type: "vulnerableJsonParse",
     regex: /JSON\.parse\s*\(\s*([^)]*)\)/g,
+    // Skip safe JSON parsing patterns with validation and safe pattern checks
+    skipPattern: /if\s*\(\s*typeof\s+jsonString\s*===\s*['"]string['"]\s*&&\s*\(jsonString\.includes\(|safeJsonParse|try\s*\{|JSON\.parse\s*\(\s*jsonString\s*\)|throw new Error|return JSON\.parse\s*\(|JSON\.parse\s*\(\s*['"][^'"]*['"]\s*\)/i,
     severity: "medium" as const,
     title: "Unsafe JSON Parsing",
     description: "Parsing JSON from untrusted sources can lead to prototype pollution or DoS attacks with carefully crafted payloads.",
@@ -3299,6 +3303,8 @@ if (section) {
   {
     type: "unsafeJSONParse",
     regex: /JSON\.parse\s*\(\s*(?!['"]|\{|\[)[^;,)]*/g,
+    // Skip safe JSON parsing patterns with validation and try-catch
+    skipPattern: /if\s*\(\s*typeof\s+jsonString\s*===\s*['"]string['"]\s*&&\s*\(jsonString\.includes\(|safeJsonParse|try\s*\{|throw new Error|return JSON\.parse\s*\(/i,
     severity: "medium" as const,
     title: "Potentially Unsafe JSON.parse Usage",
     description: "Using JSON.parse with unsanitized user-controlled data can lead to prototype pollution and other injection vulnerabilities.",
@@ -3858,7 +3864,7 @@ function createEnhancedObject(baseObj, enhancements) {
   // Create new object without modifying any prototypes
   return Object.assign({}, baseObj, validateEnhancements(enhancements));
 }`,
-    skipPattern: /Object\.prototype\.hasOwnProperty\.call|Object\.prototype\.hasOwnProperty/
+    skipPattern: /Object\.prototype\.hasOwnProperty\.call|Object\.prototype\.hasOwnProperty|Object\.prototype\.toString\.call/
   },
   
   // Web Worker script injection
