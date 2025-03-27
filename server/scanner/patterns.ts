@@ -740,6 +740,91 @@ function calculateExpression() {
   }
 }`
   },
+  
+  // Obfuscated eval detection - Critical risk
+  {
+    type: "obfuscatedEval",
+    regex: /(?:window|self|global|this)(?:\s*\[\s*(?:(['"`]\\x65['"`]\s*\+\s*['"`]\\x76['"`]\s*\+\s*['"`]\\x61['"`]\s*\+\s*['"`]\\x6c['"`])|(['"`]\\x65['"`])\s*\+\s*(['"`]\\x76['"`])\s*\+\s*(['"`]\\x61['"`])\s*\+\s*(['"`]\\x6c['"`])|(['"`]\\x65\\x76\\x61\\x6c['"`])|(['"`]\\u0065\\u0076\\u0061\\u006c['"`])|(['"`][eE](['"`]\s*\+\s*['"`])?[vV](['"`]\s*\+\s*['"`])?[aA](['"`]\s*\+\s*['"`])?[lL](['"`])?)|["']eval["']))/g,
+    severity: "critical" as const,
+    title: "Obfuscated eval() Usage",
+    description: "The code appears to be using obfuscated forms of eval() to hide malicious code execution, which is a severe security risk.",
+    recommendation: "Never use eval() or its obfuscated forms. Refactor your code to avoid dynamic code execution completely.",
+    recommendationCode: `// Do NOT use any form of obfuscated eval:
+// BAD: window["\\x65\\x76\\x61\\x6c"]("malicious code");
+// BAD: window["eval"]("malicious code");
+// BAD: self["e"+"v"+"a"+"l"]("malicious code");
+
+// Instead, redesign your code to avoid dynamic execution:
+function safelyProcessUserCode(code) {
+  // Parse and validate the input according to strict rules
+  // Use a sandbox, interpreter, or predefined commands
+  
+  // Example: only allow specific safe actions:
+  const allowedActions = {
+    'showMessage': (msg) => displaySafeText(msg),
+    'calculate': (expression) => calculateSafely(expression),
+    // other safe operations
+  };
+  
+  // Execute only allowed operations with proper validation
+}`
+  },
+  
+  // Obfuscated function names for eval - Critical risk
+  {
+    type: "obfuscatedEvalFunction",
+    regex: /function\s+[a-zA-Z0-9_$]+\s*\([^)]*\)\s*\{\s*(?:window|self|top|global|this)?\s*(?:\[|\.)?\s*(?:['"`])?(eval|\\\w+|\\x\w+|\\u\w+|\\[0-9]+|e\s*\+\s*v\s*\+\s*a\s*\+\s*l|[eE][vV][aA][lL]|["'`]\\x65\\x76\\x61\\x6c["'`]|["']\\x65["']\s*\+\s*["']\\x76["']\s*\+\s*["']\\x61["']\s*\+\s*["']\\x6c["'])['"`]?\s*\(/g,
+    severity: "critical" as const,
+    title: "Hidden eval() in Function",
+    description: "The code contains a function that internally uses eval() or an obfuscated version of it, creating a severe security vulnerability.",
+    recommendation: "Remove functions that use eval() internally. Redesign your code to avoid dynamic code execution.",
+    recommendationCode: `// UNSAFE: Wrapping eval in a function
+function executeExpression(expr) {
+  window["eval"](expr); // or any obfuscated form
+}
+
+// SAFER: Implement specific functionality
+function processUserCommand(command, params) {
+  switch(command) {
+    case 'sort':
+      return sortData(params);
+    case 'filter':
+      return filterData(params);
+    // other specific commands
+    default:
+      throw new Error('Unknown command');
+  }
+}`
+  },
+  
+  // Hexadecimal/Unicode representation of eval - Critical risk
+  {
+    type: "encodedEval",
+    regex: /(?:\\x65\\x76\\x61\\x6[cC]|\\u0065\\u0076\\u0061\\u006c|\\u00[36]5\\u00[37]6\\u00[36]1\\u00[36]c)/g,
+    severity: "critical" as const,
+    title: "Encoded eval() Usage",
+    description: "The code uses hex or unicode encoding to hide eval() function usage, which is a severe security risk and indicator of malicious intent.",
+    recommendation: "Never use eval() in any form, encoded or not. Redesign your code to avoid dynamic code execution.",
+    recommendationCode: `// UNSAFE - Any encoded form of eval:
+// window["\\x65\\x76\\x61\\x6c"]("alert(1)");
+// const evil = "\\u0065\\u0076\\u0061\\u006c";
+// window[evil]("alert(1)");
+
+// SAFER - Use predefined functionality:
+function safeCompute(operation, values) {
+  const operations = {
+    'sum': (arr) => arr.reduce((a, b) => a + b, 0),
+    'avg': (arr) => arr.reduce((a, b) => a + b, 0) / arr.length,
+    // add more safe operations
+  };
+  
+  if (operations[operation]) {
+    return operations[operation](values);
+  }
+  
+  throw new Error('Unsupported operation');
+}`
+  },
   {
     type: "functionConstructor",
     regex: /new\s+Function\s*\(([^)]*)\)/g,
