@@ -1,0 +1,185 @@
+'use strict'
+/* eslint-env browser */
+/* globals chrome, globalThis */
+
+function yieldToMain() {
+  if (globalThis?.scheduler?.yield) {
+    return globalThis?.scheduler.yield()
+  }
+
+  // Fall back to yielding with setTimeout.
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
+function inject(src, id, message) {
+  return new Promise((resolve) => {
+    // Inject a script tag into the page to access methods of the window object
+    const script = document.createElement('script')
+
+    script.onload = () => {
+      const onMessage = ({ data }) => {
+        if (!data.wappalyzer || !data.wappalyzer[id]) {
+          return
+        }
+
+        window.removeEventListener('message', onMessage)
+
+        resolve(data.wappalyzer[id])
+
+        script.remove()
+      }
+
+      window.addEventListener('message', onMessage)
+
+      window.postMessage({
+        wappalyzer: message,
+      })
+    }
+
+    script.setAttribute('src', chrome.runtime.getURL(src))
+
+    document.body.appendChild(script)
+  })
+}
+
+function getJs(technologies) {
+  return inject('js/js.js', 'js', {
+    technologies: technologies
+      .filter(({ js }) => Object.keys(js).length)
+      .map(({ name, js }) => ({ name, chains: Object.keys(js) })),
+  })
+}
+
+async function getDom(technologies) {
+  const startTime = performance.now()
+  const _technologies = technologies
+    .filter(({ dom }) => dom && dom.constructor === Object)
+    .map(({ name, dom }) => ({ name, dom }))
+
+  const detections = await getDomDetections(_technologies)
+
+  const returnVal = [
+    ...(await inject('js/dom.js', 'dom', {
+      technologies: _technologies.filter(({ dom }) =>
+        Object.values(dom)
+          .flat()
+          .some(({ properties }) => properties)
+      ),
+    })),
+    ...detections,
+  ]
+  performance.measure('Wappalyzer: getDom', {
+    start: startTime,
+    end: performance.now(),
+  })
+  return returnVal
+}
+
+async function getDomDetections(_technologies) {
+  const technologies = []
+  let lastYield = performance.now()
+  for (const { name, dom } of _technologies) {
+    const toScalar = (value) =>
+      typeof value === 'string' || typeof value === 'number' ? value : !!value
+
+    if (performance.now() - lastYield > 50) {
+      await yieldToMain()
+      lastYield = performance.now()
+    }
+    Object.keys(dom).forEach((selector) => {
+      let nodes = []
+
+      try {
+        nodes = document.querySelectorAll(selector)
+      } catch (error) {
+        Content.driver('error', error)
+      }
+
+      if (!nodes.length) {
+        return
+      }
+
+      dom[selector].forEach(({ exists, text, properties, attributes }) => {
+        nodes.forEach((node) => {
+          if (
+            technologies.filter(({ name: _name }) => _name === name).length >=
+            50
+          ) {
+            return
+          }
+
+          if (
+            exists &&
+            technologies.findIndex(
+              ({ name: _name, selector: _selector, exists }) =>
+                name === _name && selector === _selector && exists === ''
+            ) === -1
+          ) {
+            technologies.push({
+              name,
+              selector,
+              exists: '',
+            })
+          }
+
+          if (text) {
+            // eslint-disable-next-line unicorn/prefer-text-content
+            const value = (node.innerText ? node.innerText.trim() : '').slice(
+              0,
+              1000000
+            )
+
+            if (
+              value &&
+              technologies.findIndex(
+                ({ name: _name, selector: _selector, text }) =>
+                  name === _name && selector === _selector && text === value
+              ) === -1
+            ) {
+              technologies.push({
+                name,
+                selector,
+                text: value,
+              })
+            }
+          }
+
+          if (properties) {
+            Object.keys(properties).forEach((property) => {
+              if (
+                Object.prototype.hasOwnProperty.call(node, property) &&
+                technologies.findIndex(
+                  ({
+                    name: _name,
+                    selector: _selector,
+                    property: _property,
+                    value,
+                  }) =>
+                    name === _name &&
+                    selector === _selector &&
+                    property === _property &&
+                    value === toScalar(value)
+                ) === -1
+              ) {
+                const value = node[property]
+
+                if (typeof value !== 'undefined') {
+                  technologies.push({
+                    name,
+                    selector,
+                    property,
+                    value: toScalar(value),
+                  })
+                }
+              }
+            })
+          }
+
+          if (attributes) {
+            Object.keys(attributes).forEach((attribute) => {
+              if (
+                node.hasAttribute(attribute) &&
+                technologies.findIndex(
+                  ({

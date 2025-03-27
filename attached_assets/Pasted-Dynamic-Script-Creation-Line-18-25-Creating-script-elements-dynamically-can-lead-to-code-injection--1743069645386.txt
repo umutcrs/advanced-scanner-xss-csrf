@@ -1,0 +1,384 @@
+Dynamic Script Creation
+Line 18:25
+
+Creating script elements dynamically can lead to code injection vulnerabilities, especially when the source or content is influenced by user input.
+
+Vulnerable Code
+
+Copy
+...// Inject a script tag into the page to access methods of the window object
+const script = document.createElement ('script')
+
+...
+Security Recommendation
+
+Copy Secure Code
+Avoid dynamically creating script elements. If necessary, ensure strict validation of sources and use CSP (Content Security Policy).
+
+// UNSAFE:
+// const script = document.createElement('script');
+// script.src = userControlledUrl; // Danger: remote code execution
+// document.head.appendChild(script);
+
+// SAFER approaches:
+// 1. Avoid dynamic script creation entirely, use alternative techniques
+//    like fetch() to retrieve data instead
+
+// 2. If you must create scripts dynamically, implement strict validation
+function loadScript(url) {
+  // Validate allowed domains
+  const trustedDomains = ['trusted-cdn.com', 'your-domain.com'];
+  const urlObj = new URL(url);
+  
+  if (!trustedDomains.includes(urlObj.hostname)) {
+    console.error('Script domain not allowed:', urlObj.hostname);
+    return Promise.reject(new Error('Untrusted script domain'));
+  }
+  
+  // Use fetch instead of script injection when possible
+  return fetch(url)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.text();
+    })
+    .then(code => {
+      // Validate the code before executing it
+      // This is difficult to do safely - consider alternatives
+      
+      // Execute in a controlled manner
+      const functionFromCode = new Function(code);
+      return functionFromCode();
+    });
+}
+High
+Event Handler Injection Vector
+Line 20:7
+
+Assigning event handlers directly using user input is a common XSS vector that can execute arbitrary code.
+
+Vulnerable Code
+
+Copy
+...
+script.onload = () => {
+  const onMessage = ({
+    ...
+Security Recommendation
+
+Copy Secure Code
+Use addEventListener and pass functions instead of strings. Never assign event handlers using user-controlled data.
+
+// AVOID these patterns:
+// element.onclick = userProvidedCode;                // UNSAFE
+// element['onclick'] = userProvidedCode;             // UNSAFE
+// element.setAttribute('onclick', userProvidedCode); // UNSAFE
+
+// INSTEAD, use proper event listeners:
+element.addEventListener('click', function(event) {
+  // Access user data here as a parameter
+  handleClick(userProvidedData);
+});
+
+// If you need dynamic handlers:
+const handlers = {
+  'edit': function() { /* edit functionality */ },
+  'delete': function() { /* delete functionality */ },
+  'view': function() { /* view functionality */ }
+};
+
+// Then safely use the predefined handler:
+const action = validateAction(userProvidedAction); // Validate to allowed values
+if (handlers.hasOwnProperty(action)) {
+  element.addEventListener('click', handlers[action]);
+}
+High
+Event Handler Property Assignment
+Line 20:7
+
+Setting event handler properties (onclick, onload, etc.) with user input allows direct code execution.
+
+Vulnerable Code
+
+Copy
+...
+script.onload = () => {
+  const onMessage = ({
+  data }
+  ) => {
+    if (! data.wappalyzer || ! data.wappalyzer[id]) {
+      return
+    }
+    window.removeEventListener ('message', onMessage)
+    
+    resolve (data.wappalyzer[id])
+    
+    script.remove ()
+  }
+  window.addEventListener ('message', onMessage)
+  
+  window.postMessage ({
+    wappalyzer: message,
+  }
+  )
+}
+script.setAttribute ('src', chrome.runtime.getURL (src))
+
+document.body.appendChild (script)
+}
+)
+}
+function getJs (technologies) {
+  return inject ('js / js.js', 'js', {
+    technologies: technologies
+    .filter (({
+    js }
+    ) => Object.keys (js).length)
+    .map (({
+    name, js }
+    ) => ({
+    name, chains: Object.keys (js) }
+    )),
+  }
+  )
+}
+async function getDom (technologies) {
+  const startTime = performance.now ()
+  const _technologies = technologies
+  .filter (({
+  dom }
+  ) => dom && dom.constructor === Object)
+  .map (({
+  name, dom }
+  ) => ({
+  name, dom }
+  ))
+  
+  const detections = await getDomDetections (_technologies)
+  
+  const returnVal = [
+  ...(await inject ('js / dom.js', 'dom', {
+    technologies: _technologies.filter (({
+    dom }
+    ) =>
+    Object.values (dom)
+    .flat ()
+    .some (({
+    properties }
+    ) => properties)
+    ),
+  }
+  )),
+  ...detections,
+  ]
+  performance.measure ('Wappalyzer: getDom', {
+    start: startTime,
+    end: performance.now (),
+  }
+  )
+  return returnVal
+}
+async function getDomDetections (_technologies) {
+  const technologies = []
+  let lastYield = performance.now ()
+  for (const {
+  name, dom }
+  of _technologies) {
+    const toScalar = (value) =>
+    typeof value === 'string' || typeof value === 'number' ? value : !! value
+    
+    if (performance.now () - lastYield > 50) {
+      await yieldToMain ()
+      lastYield = performance.now ()
+    }
+    Object.keys (dom).forEach ((selector) => {
+      let nodes = []
+      
+      try {
+        nodes = document.querySelectorAll (selector)
+      }
+      catch (error) {
+        Content.driver ('error', error)
+      }
+      if (! nodes.length) {
+        return
+      }
+      dom[selector].forEach (({
+      exists, text, properties, attributes }
+      ) => {
+        nodes.forEach ((node) => {
+          if (
+          technologies.filter (({
+          name: _name }
+          ) => _name === name).length >=
+          50
+          ) {
+            return
+          }
+          if (
+          exists &&
+          technologies.findIndex (
+          ({
+          name: _name, selector: _selector, exists }
+          ) =>
+          name === _name && selector === _selector && exists === ''
+          ) === - 1
+          ) {
+            technologies.push ({
+              name,
+              selector,
+              exists: '',
+            }
+            )
+          }
+          if (text) {
+            // eslint - disable - next - line unicorn / prefer - text - content
+            const value = (node.innerText ? node.innerText.trim () : '').slice (
+            0,
+            1000000
+            )
+            
+            if (
+            value &&
+            technologies.findIndex (
+            ({
+            name: _name, selector: _selector, text }
+            ) =>
+            name === _name && selector === _selector && text === value
+            ) === - 1
+            ) {
+              technologies.push ({
+                name,
+                selector,
+                text: value,
+              }
+              )
+            }
+          }
+          if (properties) {
+            Object.keys (properties).forEach ((property) => {
+              if (
+              Object.prototype.hasOwnProperty.call (node, property) &&
+              technologies.findIndex (
+              ({
+                name: _name,
+                selector: _selector,
+                property: _property,
+                value,
+              }
+              ) =>
+              name === _name &&
+              selector === _selector &&
+              property === _property &&
+              value === toScalar (value)
+              ) === - 1
+              ) {
+                const value = node[property]
+                
+                if (typeof value !== 'undefined') {
+                  technologies.push ({
+                    name,
+                    selector,
+                    property,
+                    value: toScalar (value),
+                  }
+                  )
+                }
+              }
+            }
+            )
+          }
+          if (attributes) {
+            Object.keys (attributes).forEach ((attribute) => {
+              if (
+              node.hasAttribute (attribute) &&
+              technologies.findIndex (
+              ({
+Security Recommendation
+
+Copy Secure Code
+Never set event handler properties using user input. Use addEventListener with function references.
+
+// Instead of:
+element.onclick = 'alert("' + userInput + '")';
+// or
+element.onclick = function() { processUserInput(userInput); };
+
+// Use addEventListener with a function:
+element.addEventListener('click', function(event) {
+  // Safely handle the input
+  displayMessage(sanitizeInput(userInput));
+});
+High
+Prototype Pollution Risk
+Line 176:1
+
+Modifying Object.prototype directly can lead to prototype pollution attacks, enabling XSS or security bypasses.
+
+Vulnerable Code
+
+Copy
+...if (
+Object.prototype.hasOwnProperty.call (node, property) &&
+technologies.findIndex (
+...
+Security Recommendation
+
+Copy Secure Code
+Never modify object prototypes with user input or in ways that could be influenced by user input.
+
+// DANGEROUS:
+// Object.prototype.toString = () => userControlledValue;
+// Object.assign(Object.prototype, userInputObject);
+
+// SAFE alternatives:
+// 1. Create a new object with desired properties
+const safeObj = { 
+  ...baseObject, 
+  userValue: sanitizedUserValue 
+};
+
+// 2. For mixins and utilities, use composition over inheritance
+function createEnhancedObject(baseObj, enhancements) {
+  // Create new object without modifying any prototypes
+  return Object.assign({}, baseObj, validateEnhancements(enhancements));
+}
+Medium
+Dynamic Script Creation
+Line 18:16
+
+Dynamically creating script elements and setting their content or src attribute can execute malicious code.
+
+Vulnerable Code
+
+Copy
+...// Inject a script tag into the page to access methods of the window object
+const script = document.createElement ('script')
+
+...
+Security Recommendation
+
+Copy Secure Code
+Never load scripts from untrusted sources. Use a whitelist approach to validate script URLs before loading.
+
+function loadScript(src) {
+  // Whitelist of allowed script sources
+  const allowedSources = [
+    'https://trusted-cdn.com/',
+    'https://your-own-domain.com/scripts/'
+  ];
+  
+  // Check if URL is from allowed source
+  const isAllowed = allowedSources.some(source => 
+    src.startsWith(source));
+    
+  if (!isAllowed) {
+    console.error("Blocked loading script from untrusted source");
+    return;
+  }
+  
+  const script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}

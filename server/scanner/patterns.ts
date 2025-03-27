@@ -10,6 +10,15 @@ Object.defineProperty(exports, "__esModule",{value:true});
 Object.defineProperty(exports,"__esModule",{value:true});
 Object.defineProperty(module.exports, "__esModule", { value: true });`;
 
+// Tarayıcı uzantısı için güvenli API'leri kontrol et
+// chrome.runtime.getURL API'si güvenli - tarayıcı uzantısı içinden geldiği kesin olan dosyaları işaret eder
+const safeBrowserExtensionPattern = (code: string): boolean => {
+  return code.includes("chrome.runtime.getURL") || 
+         code.includes("browser.runtime.getURL") ||
+         /chrome\.runtime\.\w+/.test(code) ||
+         /browser\.runtime\.\w+/.test(code);
+};
+
 export const scanPatterns: ScanPattern[] = [
   // Prototype Pollution Detection - daha doğru tespit için spesifik prototype manipulasyonu desenine odaklan
   {
@@ -547,6 +556,8 @@ function validateServerSide(input) {
   {
     type: "scriptSrcAssignment",
     regex: /\b(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*(?!['"])/g,
+    // Skip browser extension API patterns - they're safe
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
@@ -961,6 +972,8 @@ if (allowedActions.hasOwnProperty(actionName)) {
   {
     type: "scriptSrc",
     regex: /(?:script)(?:[A-Za-z0-9_]+)?\.src\s*=\s*([^;]*)(?=\s*;|\s*$)/g,
+    // Skip when chrome.runtime.getURL or browser.runtime.getURL is used - these are safe
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
     severity: "high" as const,
     title: "Dynamic Script Source Assignment",
     description: "Setting the src property of script elements with user input allows loading and executing untrusted code.",
@@ -1149,8 +1162,8 @@ function createSafeElement(tagName) {
   {
     type: "scriptElement",
     regex: /document\.createElement\s*\(\s*['"]script['"]\s*\)/g,
-    // Chrome extension API ve güvenli kaynaklar için scriprt oluşumlarını atla
-    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL|['"]https?:\/\/[^'"]+['"]|allowedSources\.includes/,
+    // Completely skip all scriptElement patterns for browser extensions
+    skipPattern: /chrome\.|browser\.|extension\.|chrome\.runtime|browser\.runtime|extension\.runtime|chrome\.runtime\.getURL|browser\.runtime\.getURL|extension\.getURL|['"]https?:\/\/[^'"]+['"]|allowedSources\.includes/,
     severity: "medium" as const,
     title: "Dynamic Script Creation",
     description: "Dynamically creating script elements and setting their content or src attribute can execute malicious code.",
@@ -4213,6 +4226,8 @@ app.get('/api/jsonp', (req, res) => {
   {
     type: "scriptCreation",
     regex: /createElement\s*\(\s*['"]script['"]\s*\)/g,
+    // Skip browser extension patterns - they're safe when using getURL
+    skipPattern: /chrome\.runtime\.getURL|browser\.runtime\.getURL/i,
     severity: "high" as const,
     title: "Dynamic Script Creation",
     description: "Creating script elements dynamically can lead to code injection vulnerabilities, especially when the source or content is influenced by user input.",

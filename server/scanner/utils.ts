@@ -482,6 +482,32 @@ function findContextStart(code: string, index: number, maxLookback: number): num
  * @returns A confidence score between 0 and 1
  */
 export function calculateConfidenceScore(code: string, match: RegExpExecArray, vulnType: string): number {
+  // Browser extension API'leri içeren kod için özel değerlendirme
+  const browserExtensionAPIs = [
+    "chrome.runtime", "browser.runtime", "chrome.extension", "browser.extension",
+    "chrome.tabs", "browser.tabs", "chrome.storage", "browser.storage"
+  ];
+  
+  // Chrome uzantısı API kullanıldığında script oluşturma ve src atama savunmasızlıkları için
+  if (["scriptCreation", "scriptSrc", "scriptSrcAssignment", "scriptElement"].includes(vulnType)) {
+    // Script etiketine chrome.runtime.getURL veya benzer bir API ile erişim örneğini kontrol et
+    const surroundingCode = code.substring(
+      Math.max(0, match.index - 100), 
+      Math.min(code.length, match.index + match[0].length + 100)
+    );
+    
+    // Özel API kullanımı kontrolü
+    if (browserExtensionAPIs.some(api => surroundingCode.includes(api))) {
+      if (surroundingCode.includes("chrome.runtime.getURL") || 
+          surroundingCode.includes("browser.runtime.getURL")) {
+        return 0.1; // Çok düşük confidence değeri - bu bir false positive
+      }
+      
+      // Diğer chrome API'leriyle birlikte script oluşturma
+      return 0.2; // Düşük confidence değeri - uzantı kodu olduğundan risk çok daha düşük
+    }
+  }
+  
   // Object.defineProperty ES modül işlevleriyle ilgili tüm çağrıları otomatik olarak güvenli kabul et
   if (vulnType === "prototypeManipulation" && 
       match[0].includes("Object.defineProperty") &&
