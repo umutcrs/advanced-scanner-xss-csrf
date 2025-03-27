@@ -1,0 +1,47 @@
+
+            t[o][0].call(l.exports, (function(e) {
+                return i(t[o][1][e] || e)
+            }
+            ), l, l.exports, e, t, n, r)
+        }
+        return n[o].exports
+    }
+    for (var s = "function" == typeof require && require, o = 0; o < r.length; o++)
+        i(r[o]);
+    return i
+}({
+    1: [function(e, t, n) {
+        "use strict";
+        Object.defineProperty(n, "__esModule", {
+            value: !0
+        }),
+        n.COOKIE_ID_MARKETING_WHITELIST_ORIGINS = n.COOKIE_ID_MARKETING_WHITELIST = void 0;
+        const r = n.COOKIE_ID_MARKETING_WHITELIST = ["https://metamask.io", "https://learn.metamask.io", "https://mmi-support.zendesk.com", "https://community.metamask.io", "https://support.metamask.io"];
+        n.COOKIE_ID_MARKETING_WHITELIST_ORIGINS = r.map((e => new URL(e).origin))
+    }
+    , {}],
+    2: [function(e, t, n) {
+        "use strict";
+        Object.defineProperty(n, "__esModule", {
+            value: !0
+        }),
+        n.PHISHING_WARNING_PAGE = n.PHISHING_STREAM = n.PHISHING_SAFELIST = n.METAMASK_PROVIDER = n.METAMASK_INPAGE = n.METAMASK_COOKIE_HANDLER = n.LEGACY_PUBLIC_CONFIG = n.LEGACY_PROVIDER = n.LEGACY_INPAGE = n.LEGACY_CONTENT_SCRIPT = n.CONTENT_SCRIPT = void 0;
+        n.CONTENT_SCRIPT = "metamask-contentscript",
+        n.METAMASK_INPAGE = "metamask-inpage",
+        n.PHISHING_WARNING_PAGE = "metamask-phishing-warning-page",
+        n.METAMASK_COOKIE_HANDLER = "metamask-cookie-handler",
+        n.METAMASK_PROVIDER = "metamask-provider",
+        n.PHISHING_SAFELIST = "metamask-phishing-safelist",
+        n.PHISHING_STREAM = "phishing",
+        n.LEGACY_CONTENT_SCRIPT = "contentscript",
+        n.LEGACY_INPAGE = "inpage",
+        n.LEGACY_PROVIDER = "provider",
+        n.LEGACY_PUBLIC_CONFIG = "publicConfig"
+    }
+    , {}],
+    3: [function(e, t, n) {
+        "use strict";
+        var r, i = e("../../shared/modules/browser-runtime.utils"), s = (r = e("../../shared/modules/provider-injection")) && r.__esModule ? r : {
+            default: r
+       am(d.METAMASK_COOKIE_HANDLER),
+                p.ignoreStream(d.LEGACY_PUBLIC_CONFIG),
