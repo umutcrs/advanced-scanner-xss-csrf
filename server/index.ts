@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { configureServerOptions, isGitHubEnvironment } from "./github-adapter";
 
 const app = express();
 app.use(express.json());
@@ -59,14 +60,19 @@ app.use((req, res, next) => {
   // Serve the app on port 3000 for deployment compatibility
   // this serves both the API and the client.
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-  server.listen({
-    port,
-    host: "127.0.0.1"
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  
+  // Use the GitHub adapter to determine appropriate server settings
+  if (isGitHubEnvironment()) {
+    log('Detected GitHub environment, using compatible server configuration');
+    server.listen(port, () => {
+      log(`serving on port ${port} (GitHub compatibility mode)`);
+    });
+  } else {
+    // Use normal configuration for standard environments
+    const serverOptions = configureServerOptions(port);
+    server.listen(serverOptions, () => {
+      const host = serverOptions.host || 'localhost';
+      log(`serving on ${host}:${port}`);
+    });
+  }
 })();
-
-  });
-})();
-
