@@ -315,6 +315,13 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
         // Satırda veya sonraki 3 satırda skipPattern'e uyan bir şey var mı?
         const nextLinesEndIndex = preparedCode.indexOf('\n', preparedCode.indexOf('\n', preparedCode.indexOf('\n', lineEndIndex + 1) + 1) + 1);
         const nextLinesContent = preparedCode.substring(lineStartIndex, nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length);
+        
+        // Template literal injection özel kontrolü - textContent varsa yanlış pozitif önle
+        if (pattern.type === "templateLiteralInjection" && /textContent|innerText/.test(nextLinesContent)) {
+          // Bu güvenli bir kullanım, innerText veya textContent kullanılıyor, atla
+          continue; 
+        }
+        
         const fullFunctionContent = preparedCode.substring(
           Math.max(0, lineStartIndex - 200), 
           Math.min(preparedCode.length, (nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length) + 200)
