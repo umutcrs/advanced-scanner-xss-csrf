@@ -207,9 +207,9 @@ async function displayUserComments() {
   // Template Literal Injection with unescaped parameters
   {
     type: "templateLiteralInjection",
-    regex: /`[^`]*\${(?!DOMPurify\.sanitize\()[^}]*(?:user|input|param|query|url|location|search|hash|get)[^}]*\}[^`]*`/gi,
-    // Skip if textContent or innerText is used with template literals - these are safe methods
-    skipPattern: /textContent|innerText|element\.textContent|getElementById[\s\S]*?textContent/,
+    regex: /(`[^`]*\${(?!DOMPurify\.sanitize\()[^}]*(?:user|input|param|query|url|location|search|hash|get)[^}]*\}[^`]*`)(?!.*(?:textContent|innerText|getElementById))/gi,
+    // Her zaman aynı regex'i kullanmak istemiyoruz, çünkü `` kullanımının güvenli olma olasılığı yüksek
+    skipPattern: /\.textContent|\.innerText|getElementById|\.text\(|get\s*\(\s*["']?\s*[\w-]+\s*["']?\s*\)\.textContent/i,
     severity: "high" as const,
     title: "Template Literal Injection",
     description: "Using unescaped user data in template literals that are later injected into HTML can lead to XSS vulnerabilities.",
@@ -1094,9 +1094,10 @@ if (allowedActions.hasOwnProperty(actionName)) {
   // Dynamic HTML Generation
   {
     type: "templateLiteralHtml",
-    regex: /\$\{(?:[^{}]*)\}(?=[^]*?(?:innerHTML|outerHTML|insertAdjacentHTML|document\.write|document\.writeln))/g,
-    // Skip if textContent or innerText is used - these are safe methods
-    skipPattern: /textContent|innerText/,
+    // Bu regex, template literal kullanımı içinde parametreler olması ve innerHTML gibi tehlikeli bir fonksiyonla kullanılması durumunu tespit eder
+    regex: /\$\{(?:[^{}]*)\}(?=[^]*?(?:innerHTML|outerHTML|insertAdjacentHTML|document\.write|document\.writeln))(?!.*(?:textContent|innerText))/g,
+    // Bu skip pattern, güvenli kullanım örneklerini atlamak için kullanılır
+    skipPattern: /textContent|innerText|getElementById|DOMPurify\.sanitize/i,
     severity: "high" as const,
     title: "Template Literal in HTML Context",
     description: "Using template literals with user input to generate HTML can lead to XSS vulnerabilities.",
