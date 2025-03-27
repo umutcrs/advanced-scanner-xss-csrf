@@ -1,0 +1,170 @@
+Dynamic Script Source Assignment
+Line 13:1
+
+Setting the src property of script elements with user input allows loading and executing untrusted code.
+
+Vulnerable Code
+
+Copy
+...const script = document.createElement ('script');
+script.src = config.remoteScript;
+document.head.appendChild (script);
+...
+Security Recommendation
+
+Copy Secure Code
+Always validate script sources against a whitelist of trusted domains.
+
+function loadExternalScript(src) {
+  // Whitelist of trusted domains
+  const trustedDomains = [
+    'cdn.trusted-site.com',
+    'api.your-company.com',
+    'cdn.jsdelivr.net'
+  ];
+  
+  // Parse the URL to get the hostname
+  let url;
+  try {
+    url = new URL(src, window.location.origin);
+  } catch (e) {
+    console.error("Invalid URL format");
+    return;
+  }
+  
+  // Check if the hostname is trusted
+  if (!trustedDomains.includes(url.hostname)) {
+    console.error("Untrusted script source domain");
+    return;
+  }
+  
+  // Now it's safer to load the script
+  const script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}
+High
+Dynamic Script Source Assignment
+Line 13:1
+
+Setting the src property of script elements with user input allows loading and executing untrusted code.
+
+Vulnerable Code
+
+Copy
+...const script = document.createElement ('script');
+script.src = config.remoteScript;
+document.head.appendChild (script);
+...
+Security Recommendation
+
+Copy Secure Code
+Always validate script sources against a whitelist of trusted domains.
+
+function loadExternalScript(src) {
+  // Whitelist of trusted domains
+  const trustedDomains = [
+    'cdn.trusted-site.com',
+    'api.your-company.com',
+    'cdn.jsdelivr.net'
+  ];
+  
+  // Parse the URL to get the hostname
+  let url;
+  try {
+    url = new URL(src, window.location.origin);
+  } catch (e) {
+    console.error("Invalid URL format");
+    return;
+  }
+  
+  // Check if the hostname is trusted
+  if (!trustedDomains.includes(url.hostname)) {
+    console.error("Untrusted script source domain");
+    return;
+  }
+  
+  // Now it's safer to load the script
+  const script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}
+Medium
+Potential Prototype Pollution via defineProperty
+Line 4:1
+
+Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.
+
+Vulnerable Code
+
+Copy
+...// Vulnerable approach to setting properties
+Object.defineProperty (window, 'appConfig', {
+  value: config,
+  ...
+Security Recommendation
+
+Copy Secure Code
+Validate object and property names before using defineProperty, especially with user input.
+
+// Instead of:
+// Object.defineProperty(target, userInput, { value: 'some value' });
+
+// Validate the property name first:
+function safeDefineProperty(obj, propName, descriptor) {
+  // Disallow prototype chain or constructor manipulation
+  if (propName === '__proto__' || 
+      propName === 'constructor' || 
+      propName === 'prototype') {
+    console.error('Attempted to define unsafe property:', propName);
+    return false;
+  }
+  
+  // Only allow whitelisted properties if using user input
+  const allowedProps = ['name', 'description', 'value', 'isActive'];
+  if (!allowedProps.includes(propName)) {
+    console.error('Property name not in allowed list:', propName);
+    return false;
+  }
+  
+  Object.defineProperty(obj, propName, descriptor);
+  return true;
+}
+Medium
+Dynamic Script Creation
+Line 12:16
+
+Dynamically creating script elements and setting their content or src attribute can execute malicious code.
+
+Vulnerable Code
+
+Copy
+...if (config.remoteScript) {
+  const script = document.createElement ('script');
+  script.src = config.remoteScript;
+  ...
+Security Recommendation
+
+Copy Secure Code
+Never load scripts from untrusted sources. Use a whitelist approach to validate script URLs before loading.
+
+function loadScript(src) {
+  // Whitelist of allowed script sources
+  const allowedSources = [
+    'https://trusted-cdn.com/',
+    'https://your-own-domain.com/scripts/'
+  ];
+  
+  // Check if URL is from allowed source
+  const isAllowed = allowedSources.some(source => 
+    src.startsWith(source));
+    
+  if (!isAllowed) {
+    console.error("Blocked loading script from untrusted source");
+    return;
+  }
+  
+  const script = document.createElement('script');
+  script.src = src;
+  document.head.appendChild(script);
+}

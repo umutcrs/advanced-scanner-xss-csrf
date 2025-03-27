@@ -10,6 +10,17 @@ Object.defineProperty(exports, "__esModule",{value:true});
 Object.defineProperty(exports,"__esModule",{value:true});
 Object.defineProperty(module.exports, "__esModule", { value: true });`;
 
+// Birbirleriyle ilişkili açık türlerini tanımla - aynı kod parçasında biri tespit edildiğinde,
+// diğeri de tespit edilirse, ikinci tespiti ignore et - bu şekilde tekrarlı açıkları azalt
+export const RELATED_VULNERABILITY_GROUPS = [
+  // Script oluşturma ile ilgili açıklar
+  ["scriptElement", "scriptSrc", "scriptSrcAssignment", "scriptCreation"],
+  // Prototype manipülasyonu ile ilgili açıklar
+  ["prototypeManipulation", "objectDefineProperty"],
+  // Kod yürütme ile ilgili açıklar 
+  ["eval", "Function", "setTimeout", "setInterval"]
+];
+
 // Tarayıcı uzantısı için güvenli API'leri kontrol et
 // chrome.runtime.getURL API'si güvenli - tarayıcı uzantısı içinden geldiği kesin olan dosyaları işaret eder
 const safeBrowserExtensionPattern = (code: string): boolean => {

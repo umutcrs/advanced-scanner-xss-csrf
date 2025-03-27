@@ -1,4 +1,4 @@
-import { scanPatterns } from "./patterns";
+import { scanPatterns, RELATED_VULNERABILITY_GROUPS } from "./patterns";
 import { ScanResult, Vulnerability, ScanPattern } from "@shared/schema";
 import { 
   extractCodeSnippet, 
@@ -658,7 +658,10 @@ function extractJsFromHtml(htmlContent: string): string {
  * @returns Deduplicated array of vulnerabilities
  */
 function deduplicateVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerability[] {
-  // Sort vulnerabilities by severity (critical first) and then by type
+  // TypeScript'teki Map iteration hatalarını engellemek için daha basit bir yaklaşım kullanalım
+  // Aynı kod parçası için çoklu açık tespitlerini engelleme mantığına dönüyoruz
+  
+  // Önce tüm açıklıkları kritiklik ve satır numarasına göre sıralıyoruz
   const sortedVulnerabilities = [...vulnerabilities].sort((a, b) => {
     const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
     const aSeverity = severityOrder[a.severity as keyof typeof severityOrder] || 5;
@@ -668,26 +671,118 @@ function deduplicateVulnerabilities(vulnerabilities: Vulnerability[]): Vulnerabi
       return aSeverity - bSeverity;
     }
     
+    // Satır numarası varsa, ona göre sırala
+    const aLine = a.line || 0;
+    const bLine = b.line || 0;
+    if (aLine !== bLine) {
+      return aLine - bLine;
+    }
+    
     return a.type.localeCompare(b.type);
   });
   
+  // 1. İlk aşama: Tamamen aynı kod ve tür için aynı açıkları kaldır
   const uniqueVulnerabilities: Vulnerability[] = [];
-  const seenPatterns = new Set<string>();
+  const seenKeys = new Set<string>();
+  
+  // 2. İkinci aşama: İlişkili açık türlerini kullan ve aynı satırlardaki ilişkili açıkları birleştir
+  const positionTracker: Record<string, boolean | string | number> = {};
   
   for (const vuln of sortedVulnerabilities) {
-    // Create a key based on the code snippet and type to identify duplicates
-    // We normalize whitespace and use a smaller part of the snippet
-    const snippetKey = vuln.code
-      .replace(/\s+/g, ' ')
-      .substring(0, 100) + ':' + vuln.type;
-    
-    if (!seenPatterns.has(snippetKey)) {
-      seenPatterns.add(snippetKey);
-      uniqueVulnerabilities.push(vuln);
+    // Tam kopyaları kontrol et
+    const snippetKey = vuln.code.replace(/\s+/g, ' ').substring(0, 100) + ':' + vuln.type;
+    if (seenKeys.has(snippetKey)) {
+      continue; // Tam kopyayı atla
     }
+    seenKeys.add(snippetKey);
+    
+    const line = vuln.line || 0;
+    
+    // Aynı satırda iki farklı açık bildirmekten kaçın - aynı kodda en fazla 2 açık göster
+    const posKey = `${line}`;
+    const count = positionTracker[posKey + '_count'] as number;
+    if (positionTracker[posKey] && count >= 2) {
+      continue;
+    }
+    
+    // Yakın satır kontrolü (±3 satır içinde ilişkili açıkları kontrol et)
+    let skipVuln = false;
+    
+    // İlişkili açık türlerini kontrol et
+    for (const group of RELATED_VULNERABILITY_GROUPS) {
+      // Eğer açık bu grupta ise
+      if (group.includes(vuln.type)) {
+        // Yakın satırlardaki açıkları kontrol et
+        for (let i = Math.max(1, line - 3); i <= line + 3; i++) {
+          const nearKey = `${i}`;
+          
+          // Eğer bu satırda bir açık var ve bu açık mevcut açıkla aynı grupta ise
+          const nearKeyType = positionTracker[nearKey + '_type'] as string | undefined;
+          if (positionTracker[nearKey] && 
+              nearKeyType && 
+              group.includes(nearKeyType) && 
+              nearKeyType !== vuln.type) {
+            skipVuln = true;
+            break;
+          }
+        }
+        if (skipVuln) break;
+      }
+    }
+    
+    if (skipVuln) {
+      continue; // Yakın satırda benzer bir script açığı var, bunu atla
+    }
+    
+    // Object.defineProperty ve script element ilgili benzer açıkları birleştir
+    // Örneğin, bir fonksiyonda hem defineProperty hem script oluşturma varsa
+    if (vuln.type === 'objectDefineProperty' && uniqueVulnerabilities.some(uv => 
+        uv.type.includes('script') && 
+        Math.abs((uv.line || 0) - line) <= 5 &&
+        calculateStringSimilarity(uv.code, vuln.code) > 0.5)) {
+      continue;
+    }
+    
+    // Bu açığı sakla
+    uniqueVulnerabilities.push(vuln);
+    
+    // Pozisyon takibini güncelle
+    positionTracker[posKey] = true;
+    positionTracker[posKey + '_type'] = vuln.type;
+    
+    // Sayacı güncelle
+    const currentCount = positionTracker[posKey + '_count'] as number || 0;
+    positionTracker[posKey + '_count'] = currentCount + 1;
   }
   
   return uniqueVulnerabilities;
+}
+
+/**
+ * İki string arasındaki benzerlik oranını hesaplar
+ * @param str1 Birinci string
+ * @param str2 İkinci string
+ * @returns 0 ile 1 arasında benzerlik oranı (1: tamamen aynı)
+ */
+function calculateStringSimilarity(str1: string, str2: string): number {
+  if (str1 === str2) return 1.0;
+  if (str1.length === 0 || str2.length === 0) return 0.0;
+  
+  // Her iki metinde de geçen kelime sayısını hesapla
+  const words1 = str1.split(/\s+/);
+  const words2 = str2.split(/\s+/);
+  const wordSet1 = new Set(words1);
+  const wordSet2 = new Set(words2);
+  
+  let commonWords = 0;
+  Array.from(wordSet1).forEach(word => {
+    if (wordSet2.has(word)) {
+      commonWords++;
+    }
+  });
+  
+  // Jaccard benzerlik katsayısı: kesişim / birleşim
+  return commonWords / (wordSet1.size + wordSet2.size - commonWords);
 }
 
 /**
