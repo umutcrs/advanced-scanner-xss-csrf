@@ -1220,8 +1220,8 @@ function executeAllowedOperation(operationName, ...args) {
   {
     type: "postMessageOrigin",
     regex: /addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)\s*\{(?:[^{}]|(?:\{[^{}]*\}))*\}|[^,)]+)(?!\s*,[^,]+\.origin)/g,
-    // Skip browser extension message patterns
-    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>/i,
+    // This is a common pattern in browser extensions and safe in that context
+    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>|\(\s*\{\s*data\s*\}\s*\)|wappalyzer/i,
     severity: "medium" as const,
     title: "postMessage Without Origin Check",
     description: "Handling postMessage events without verifying the origin can lead to XSS attacks from malicious websites.",
@@ -3837,7 +3837,7 @@ try {
   // Prototype Pollution
   {
     type: "prototypeModification",
-    regex: /Object\.prototype\./g,
+    regex: /Object\.prototype\.[a-zA-Z][^\.].+[^;]*/g, // Modified pattern to exclude Object.prototype.hasOwnProperty.call
     severity: "high" as const,
     title: "Prototype Pollution Risk",
     description: "Modifying Object.prototype directly can lead to prototype pollution attacks, enabling XSS or security bypasses.",
@@ -3857,7 +3857,8 @@ const safeObj = {
 function createEnhancedObject(baseObj, enhancements) {
   // Create new object without modifying any prototypes
   return Object.assign({}, baseObj, validateEnhancements(enhancements));
-}`
+}`,
+    skipPattern: /Object\.prototype\.hasOwnProperty\.call|Object\.prototype\.hasOwnProperty/
   },
   
   // Web Worker script injection

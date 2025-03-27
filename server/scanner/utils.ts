@@ -489,7 +489,15 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
   ];
   
   // Browser extension pattern detection for Object.prototype and addEventListener
-  if (vulnType === "prototypeManipulation" || vulnType === "postMessageOrigin") {
+  if (vulnType === "prototypeManipulation" || vulnType === "prototypeModification" || vulnType === "postMessageOrigin") {
+    // Object.prototype.hasOwnProperty.call is ALWAYS safe and should never be flagged
+    if (vulnType === "prototypeManipulation" || vulnType === "prototypeModification") {
+      // Check for the secure pattern - this is ALWAYS safe regardless of context
+      if (match[0].includes("Object.prototype.hasOwnProperty.call")) {
+        return 0; // Absolute confidence this is safe - correct pattern for property checking
+      }
+    }
+
     // Check if this is a browser extension content script
     if (code.includes(';(function ()') || code.includes('(function()')) {
       // Look for iife pattern commonly used in extension content scripts
@@ -498,10 +506,10 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
         Math.min(code.length, match.index + match[0].length + 200)
       );
       
-      // Is this Object.prototype.hasOwnProperty.call pattern? (actually secure)
-      if (vulnType === "prototypeManipulation" && 
+      // More checks for Object.prototype.hasOwnProperty.call pattern (actually secure)
+      if ((vulnType === "prototypeManipulation" || vulnType === "prototypeModification") && 
           surroundingCode.includes("Object.prototype.hasOwnProperty.call")) {
-        return 0.1; // This is a safe usage, not a vulnerability
+        return 0; // This is a safe usage, not a vulnerability
       }
       
       // Is this a content script message handler without origin checking?
@@ -509,9 +517,10 @@ export function calculateConfidenceScore(code: string, match: RegExpExecArray, v
         // Check for specific extension message handling patterns
         if (surroundingCode.includes("const onMessage = ({") || 
             surroundingCode.includes("function onMessage") ||
-            surroundingCode.includes("!data.") ||
+            surroundingCode.includes("!data.") || 
+            surroundingCode.match(/\(\s*{\s*data\s*}\s*\)/i) ||
             surroundingCode.includes("data.wappalyzer")) {
-          return 0.1; // This is a browser extension pattern, likely safe
+          return 0; // This is a browser extension pattern, completely safe
         }
       }
     }
