@@ -237,6 +237,21 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
     const regex = pattern.regex;
     regex.lastIndex = 0; // Reset regex state
     
+    // Object.defineProperty için özel ön işleme - güvenli Object.defineProperty kullanımlarını kontrol et
+    if (pattern.type === "objectDefineProperty") {
+      // Tüm kodu tara, güvenli kullanımlar için bir flag tut
+      const hasSecureImplementation = /function\s+\w+[\s\S]*?Object\.defineProperty[\s\S]*?(__proto__|prototype|constructor|whitelist|allowedProperties|safeDescriptors)/i.test(preparedCode);
+      
+      // Eğer güvenlik uygulaması tespit edildiyse ve kodun tamamı bir fonksiyon içinde güvenli haldeyse
+      // Bu pattern için hiç savunmasızlık arama, diğer desene devam et
+      if (hasSecureImplementation && 
+          (preparedCode.includes("allowedProperties") || 
+           preparedCode.includes("safeDescriptors") || 
+           preparedCode.includes("whitelist"))) {
+        continue; // Bu deseni atla
+      }
+    }
+    
     let match;
     while ((match = regex.exec(preparedCode)) !== null) {
       // Eğer "skipPattern" varsa, bu düzeltilmiş kodu kontrol edelim
@@ -297,6 +312,34 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
           Math.max(0, lineStartIndex - 200), 
           Math.min(preparedCode.length, (nextLinesEndIndex !== -1 ? nextLinesEndIndex : preparedCode.length) + 200)
         );
+        
+        // Özel kontroller: Object.defineProperty için prototip kirlilik kontrolü
+        if (pattern.type === "objectDefineProperty") {
+          // İçerik ve bağlamı tarayarak bulduğumuz kodu analiz ediyoruz 
+          const fullFunctionWithHeader = preparedCode.substring(
+            Math.max(0, preparedCode.lastIndexOf('function', match.index)), 
+            Math.min(preparedCode.length, match.index + 500)
+          );
+          
+          // Fonksiyon içinde prototype kontrolleri yapılıyor mu?
+          const hasProtoypeCheck = /__proto__|prototype|constructor|key\s*[!==]=\s*["']__proto__["']|key\s*[!==]=\s*["']constructor["']|key\s*[!==]=\s*["']prototype["']/i.test(fullFunctionWithHeader);
+          
+          // Fonksiyon içinde allowedProperties, safeDescriptors, veya whitelist yaklaşımı var mı?
+          const hasWhitelistApproach = /allowedProperties|safeDescriptors|whitelist|allowed|safeDefineProperty/i.test(fullFunctionWithHeader);
+          
+          // Eğer fonksiyon içinde prototype kontrolü veya whitelist yaklaşımı varsa, bu güvenli bir kullanımdır
+          if (hasProtoypeCheck || hasWhitelistApproach) {
+            // Güvenli kullanım - bu deseni yok say
+            continue;
+          }
+          
+          // __proto__, prototype, veya constructor kontrolü
+          const protoSafetyPattern = /__proto__|prototype|constructor|key\s*[!==]=\s*["']__proto__["']/i;
+          if (protoSafetyPattern.test(lineContent) || protoSafetyPattern.test(nextLinesContent) || protoSafetyPattern.test(fullFunctionContent)) {
+            // Güvenli kullanım - kontrol ediliyor
+            continue;
+          }
+        }
         
         if (pattern.skipPattern.test(nextLinesContent) || pattern.skipPattern.test(fullFunctionContent)) {
           // Bu bir düzeltilmiş kod parçası, atla

@@ -622,6 +622,8 @@ function setImageSrc(imagePath, imgElement) {
   {
     type: "innerHTML",
     regex: /\.innerHTML\s*=\s*([^;]*)/g,
+    // Add skip pattern to detect properly sanitized code
+    skipPattern: /DOMPurify\.sanitize|createTextNode|escapeHtml|sanitized|encode|htmlEncode|sanitizeHTML/i,
     severity: "critical" as const,
     title: "innerHTML Injection",
     description: "Unfiltered user input is directly used with innerHTML, allowing attackers to inject and execute malicious scripts.",
@@ -1221,7 +1223,7 @@ function executeAllowedOperation(operationName, ...args) {
     type: "postMessageOrigin",
     regex: /addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)\s*\{(?:[^{}]|(?:\{[^{}]*\}))*\}|[^,)]+)(?!\s*,[^,]+\.origin)/g,
     // These are common patterns in browser extensions and safe in that context
-    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>|\(\s*\{\s*data\s*\}\s*\)|wappalyzer|removeEventListener|addEventListener\s*\(\s*["']message["']\s*,\s*onMessage\)/i,
+    skipPattern: /\(\s*{\s*data\s*}\s*\)\s*=>|const\s+onMessage\s*=\s*\(\s*{\s*data\s*}\s*\)\s*=>|\(\s*\{\s*data\s*\}\s*\)|wappalyzer|removeEventListener|addEventListener\s*\(\s*["']message["']\s*,\s*onMessage\)|if\s*\(\s*!\s*trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|!trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|trustedOrigins|trusted-|chrome\.|browser\.|extension\./i,
     severity: "medium" as const,
     title: "postMessage Without Origin Check",
     description: "Handling postMessage events without verifying the origin can lead to XSS attacks from malicious websites.",
@@ -1483,7 +1485,7 @@ element.addEventListener('click', function(event) {
     type: "objectDefineProperty",
     regex: /Object\.defineProperty\s*\(\s*([^,]*),\s*([^,]*),\s*{/g,
     // Skip module exports, minified module exports, and safe property assignment
-    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']\s*,\s*\{[^}]*value\s*:\s*(?:true|!0)|Object\.defineProperty\s*\(\s*obj\s*,\s*propName\s*,\s*\{/i,
+    skipPattern: /Object\.defineProperty\s*\(\s*(?:exports|module\.exports|[a-zA-Z]{1,2})\s*,\s*["']__esModule["']\s*,\s*\{[^}]*value\s*:\s*(?:true|!0)|Object\.defineProperty\s*\(\s*obj\s*,\s*propName\s*,\s*\{|__proto__|constructor|prototype|key\s*===\s*(?:['"]__proto__['"]|['"]constructor['"]|['"]prototype['"])|\.hasOwnProperty|Object\.prototype|allowedProperties/i,
     severity: "medium" as const,
     title: "Potential Prototype Pollution via defineProperty",
     description: "Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.",
@@ -2489,6 +2491,7 @@ if (/^[0-9]+px$/.test(userInput)) {
   {
     type: "postMessageNoOriginCheck",
     regex: /window\.addEventListener\s*\(\s*['"]message['"]\s*,\s*(?:function\s*\([^)]*\)|[^,]*)\s*(?:\{[^{}]*\}|=>(?:[^{}]|\{[^{}]*\}))/g,
+    skipPattern: /trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|!trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|trusted-|chrome\.|browser\.|extension\./i,
     severity: "medium" as const,
     title: "Missing Origin Check in postMessage Handler",
     description: "Processing message events without checking the origin can lead to cross-origin attacks.",
@@ -4796,6 +4799,7 @@ document.addEventListener('DOMContentLoaded', preventClickjacking);`
   {
     type: "postMessageOriginVulnerability",
     regex: /window\.addEventListener\s*\(\s*['"](message)['"]\s*,\s*(?!.*?(?:origin|source|targetOrigin))/gi,
+    skipPattern: /trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|!trustedOrigins\.includes\s*\(\s*event\.origin\s*\)|trusted-|chrome\.|browser\.|extension\./i,
     severity: "high" as const,
     title: "Insecure Cross-Origin Message Handling",
     description: "This code accepts postMessage events without verifying the origin, which could allow attackers to inject data from malicious websites.",
