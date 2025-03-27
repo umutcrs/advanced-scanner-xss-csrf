@@ -16,7 +16,15 @@ const browserExtensionSafeAPIs = [
   "chrome.extension", 
   "browser.extension", 
   "chrome.tabs", 
-  "browser.tabs"
+  "browser.tabs",
+  "chrome.storage.sync",
+  "chrome.storage.local",
+  "chrome.scripting.executeScript",
+  "chrome.runtime.onMessage",
+  "chrome.runtime.onMessageExternal",
+  "chrome.runtime.getURL",
+  "browser.runtime.getURL",
+  "chrome.runtime.id"
 ];
 
 // ES Module dışa aktarım whitelist - Bu ifadeler kesinlikle güvenli olarak kabul edilir
@@ -104,7 +112,20 @@ export async function scanJavaScriptCode(code: string): Promise<ScanResult> {
   
   // Check for browser extension APIs and specifically getURL pattern which is always safe
   const isBrowserExtension = browserExtensionSafeAPIs.some(api => code.includes(api));
-  const hasGetUrlPattern = code.includes("chrome.runtime.getURL") || code.includes("browser.runtime.getURL");
+  // Check if code potentially contains browser extension specific patterns
+  const extensionPatterns = [
+    "chrome.runtime.getURL",
+    "browser.runtime.getURL",
+    "chrome.tabs.executeScript",
+    "chrome.scripting.executeScript",
+    "chrome.runtime.onMessage.addListener",
+    "chrome.runtime.onMessageExternal.addListener",
+    "chrome.storage.sync.get",
+    "chrome.storage.sync.set",
+    "chrome.storage.local.get",
+    "chrome.storage.local.set"
+  ];
+  const hasGetUrlPattern = extensionPatterns.some(pattern => code.includes(pattern));
   
   // Add special handling for Object.prototype.hasOwnProperty.call pattern which is a best practice
   const hasOwnPropertyCallPattern = /Object\.prototype\.hasOwnProperty\.call\s*\(/;

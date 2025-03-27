@@ -1,0 +1,88 @@
+{
+  "truePositivesAdvanced": {
+    "total": 24,
+    "expected": 15,
+    "detectionRate": 160,
+    "byType": {
+      "scriptCreation": 3,
+      "scriptSrc": 3,
+      "scriptSrcAssignment": 3,
+      "templateLiteralInjection": 1,
+      "dangerousInnerHTMLWithVariable": 1,
+      "postMessageOriginVulnerability": 1,
+      "scriptElement": 2,
+      "domClobberingViaID": 1,
+      "objectDefineProperty": 1,
+      "postMessageNoOriginCheck": 1,
+      "postMessageOrigin": 1,
+      "documentGetElementById": 1,
+      "innerHTML": 1,
+      "eval": 2,
+      "formCSRFVulnerability": 1,
+      "functionConstructor": 1
+    }
+  },
+  "falsePositivesAdvanced": {
+    "total": 7,
+    "expected": 0,
+    "falsePositiveRate": 7,
+    "byType": {
+      "postMessageOriginVulnerability": 1,
+      "scriptSrc": 1,
+      "scriptSrcAssignment": 1,
+      "objectDefineProperty": 1,
+      "postMessageOrigin": 1,
+      "scriptElement": 1,
+      "innerHTML": 1
+    }
+  },
+  "obfuscatedCode": {
+    "total": 15,
+    "expected": 15,
+    "detectionRate": 100,
+    "byType": {
+      "postMessageOriginVulnerability": 1,
+      "dangerousInnerHTMLWithVariable": 1,
+      "scriptCreation": 1,
+      "eventHandlerInjection": 1,
+      "eventHandlerProperty": 1,
+      "domClobberingViaID": 2,
+      "postMessageNoOriginCheck": 1,
+      "postMessageOrigin": 1,
+      "scriptElement": 1,
+      "documentGetElementById": 1,
+      "base64Execution": 1,
+      "functionConstructor": 1,
+      "innerHTML": 1,
+      "eval": 1
+    }
+  },
+  "csrfComplex": {
+    "total": 26,
+    "expected": 15,
+    "detectionRate": 173.33333333333334,
+    "byType": {
+      "insecureCookieSettings": 1,
+      "missingSameSiteCookieAttribute": 1,
+      "improperDoubleSubmitCookieImplementation": 1,
+      "domClobberingViaID": 5,
+      "aHref": 1,
+      "dangerousAnchorHref": 1,
+      "jsonParse": 2,
+      "jsonParseVulnerability": 2,
+      "unsafeJSONParse": 2,
+      "vulnerableJsonParse": 2,
+      "documentGetElementById": 5,
+      "imageSrcAssignment": 1,
+      "urlConstruction": 1,
+      "clientSideValidation": 1
+    }
+  },
+  "browserExtensionPatterns": {
+    "total": 0,
+    "expectedVulnerable": 10,
+    "expectedSafe": 10,
+    "detectionRate": 0,
+    "byType": {}
+  }
+}

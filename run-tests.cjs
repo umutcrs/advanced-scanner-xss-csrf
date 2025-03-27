@@ -42,6 +42,13 @@ function runTest(testName, testCode) {
 
       res.on('end', () => {
         try {
+          // Debug: Show the responseData if it's too long truncate it
+          if (responseData.length > 500) {
+            console.log(`Response data for ${testName} (truncated): ${responseData.substring(0, 500)}...`);
+          } else {
+            console.log(`Response data for ${testName}: ${responseData}`);
+          }
+          
           const result = JSON.parse(responseData);
           
           // Sonuçları kaydet
@@ -55,6 +62,11 @@ function runTest(testName, testCode) {
           resolve(result);
         } catch (err) {
           console.error(`Error parsing response for ${testName}:`, err);
+          console.error(`Response length: ${responseData.length}`);
+          if (responseData.length > 0) {
+            // Try to find where the JSON might be malformed by showing the end of the string
+            console.error(`Response end: ${responseData.substring(responseData.length - 100)}`);
+          }
           reject(err);
         }
       });

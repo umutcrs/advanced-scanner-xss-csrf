@@ -1,0 +1,99 @@
+{
+  "vulnerabilities": [
+    {
+      "id": "38e2cf4e-a4b2-4e3c-bc92-3c1b47451d79",
+      "type": "postMessageOriginVulnerability",
+      "severity": "high",
+      "title": "Insecure Cross-Origin Message Handling",
+      "description": "This code accepts postMessage events without verifying the origin, which could allow attackers to inject data from malicious websites.",
+      "code": "...];\nwindow.addEventListener ('message', function (event) {\n  // Origin validation\n  ...",
+      "line": 164,
+      "column": 1,
+      "recommendation": "Always validate the origin of incoming messages before processing them.",
+      "recommendationCode": "// UNSAFE:\n// window.addEventListener('message', function(event) {\n//   const data = event.data;\n//   // Process data without origin check...\n// });\n\n// SAFE:\nwindow.addEventListener('message', function(event) {\n  // Always verify the origin of incoming messages\n  const trustedOrigins = ['https://trusted-site.com', 'https://api.your-app.com'];\n  \n  if (!trustedOrigins.includes(event.origin)) {\n    console.error('Message received from untrusted origin:', event.origin);\n    return;\n  }\n  \n  // It's safe to process the message now\n  try {\n    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;\n    \n    // Process data...\n    \n  } catch (error) {\n    console.error('Error processing message:', error);\n  }\n});\n\n// When sending messages, always specify target origin:\ntargetWindow.postMessage(data, 'https://specific-target.com');  // Never use '*'"
+    },
+    {
+      "id": "2a543b52-1120-43df-a9fc-5ec2b7320479",
+      "type": "scriptSrc",
+      "severity": "high",
+      "title": "Dynamic Script Source Assignment",
+      "description": "Setting the src property of script elements with user input allows loading and executing untrusted code.",
+      "code": "...const script = document.createElement ('script');\nscript.src = url;\n// Set integrity for subresource integrity protection\n...",
+      "line": 196,
+      "column": 1,
+      "recommendation": "Always validate script sources against a whitelist of trusted domains.",
+      "recommendationCode": "function loadExternalScript(src) {\n  // Whitelist of trusted domains\n  const trustedDomains = [\n    'cdn.trusted-site.com',\n    'api.your-company.com',\n    'cdn.jsdelivr.net'\n  ];\n  \n  // Parse the URL to get the hostname\n  let url;\n  try {\n    url = new URL(src, window.location.origin);\n  } catch (e) {\n    console.error(\"Invalid URL format\");\n    return;\n  }\n  \n  // Check if the hostname is trusted\n  if (!trustedDomains.includes(url.hostname)) {\n    console.error(\"Untrusted script source domain\");\n    return;\n  }\n  \n  // Now it's safer to load the script\n  const script = document.createElement('script');\n  script.src = src;\n  document.head.appendChild(script);\n}"
+    },
+    {
+      "id": "c734007b-3754-49ff-b4fe-ef2ee6c16991",
+      "type": "scriptSrcAssignment",
+      "severity": "high",
+      "title": "Dynamic Script Source Assignment",
+      "description": "Setting the src property of script elements with user input allows loading and executing untrusted code.",
+      "code": "...const script = document.createElement ('script');\nscript.src = url;\n// Set integrity for subresource integrity protection\n...",
+      "line": 196,
+      "column": 1,
+      "recommendation": "Always validate script sources against a whitelist of trusted domains.",
+      "recommendationCode": "function loadExternalScript(src) {\n  // Whitelist of trusted domains\n  const trustedDomains = [\n    'cdn.trusted-site.com',\n    'api.your-company.com',\n    'cdn.jsdelivr.net'\n  ];\n  \n  // Parse the URL to get the hostname\n  let url;\n  try {\n    url = new URL(src, window.location.origin);\n  } catch (e) {\n    console.error(\"Invalid URL format\");\n    return;\n  }\n  \n  // Check if the hostname is trusted\n  if (!trustedDomains.includes(url.hostname)) {\n    console.error(\"Untrusted script source domain\");\n    return;\n  }\n  \n  // Now it's safer to load the script\n  const script = document.createElement('script');\n  script.src = src;\n  document.head.appendChild(script);\n}"
+    },
+    {
+      "id": "f3cf4be1-c3f3-42be-962c-818ecbd533e8",
+      "type": "objectDefineProperty",
+      "severity": "medium",
+      "title": "Potential Prototype Pollution via defineProperty",
+      "description": "Using Object.defineProperty with user-controlled property names can lead to prototype pollution or object property clobbering.",
+      "code": "...// Create safe descriptor\nObject.defineProperty (obj, key, {\n  value: allowedProperties[key],\n  ...",
+      "line": 74,
+      "column": 1,
+      "recommendation": "Validate object and property names before using defineProperty, especially with user input.",
+      "recommendationCode": "// Instead of:\n// Object.defineProperty(target, userInput, { value: 'some value' });\n\n// Validate the property name first:\nfunction safeDefineProperty(obj, propName, descriptor) {\n  // Disallow prototype chain or constructor manipulation\n  if (propName === '__proto__' || \n      propName === 'constructor' || \n      propName === 'prototype') {\n    console.error('Attempted to define unsafe property:', propName);\n    return false;\n  }\n  \n  // Only allow whitelisted properties if using user input\n  const allowedProps = ['name', 'description', 'value', 'isActive'];\n  if (!allowedProps.includes(propName)) {\n    console.error('Property name not in allowed list:', propName);\n    return false;\n  }\n  \n  Object.defineProperty(obj, propName, descriptor);\n  return true;\n}"
+    },
+    {
+      "id": "f613fa75-8b1a-4e6e-99b2-e4751514a7be",
+      "type": "postMessageOrigin",
+      "severity": "medium",
+      "title": "postMessage Without Origin Check",
+      "description": "Handling postMessage events without verifying the origin can lead to XSS attacks from malicious websites.",
+      "code": "...];\nwindow.addEventListener ('message', function (event) {\n  // Origin validation\n  ...",
+      "line": 164,
+      "column": 8,
+      "recommendation": "Always validate the origin of received messages.",
+      "recommendationCode": "// Instead of:\nwindow.addEventListener('message', function(event) {\n  // Process event.data without checking origin\n  processMessage(event.data);\n});\n\n// Add origin validation:\nwindow.addEventListener('message', function(event) {\n  // Check that the origin is from a trusted domain\n  const trustedOrigins = ['https://trusted-site.com', 'https://partner-site.org'];\n  \n  if (trustedOrigins.includes(event.origin)) {\n    // Safe to process the message\n    processMessage(event.data);\n  } else {\n    console.warn('Received message from untrusted origin:', event.origin);\n  }\n});"
+    },
+    {
+      "id": "9e413147-81ad-4d6e-a6ae-670431ccb23d",
+      "type": "scriptElement",
+      "severity": "medium",
+      "title": "Dynamic Script Creation",
+      "description": "Dynamically creating script elements and setting their content or src attribute can execute malicious code.",
+      "code": "...}\nconst script = document.createElement ('script');\nscript.src = url;\n...",
+      "line": 195,
+      "column": 16,
+      "recommendation": "Never load scripts from untrusted sources. Use a whitelist approach to validate script URLs before loading.",
+      "recommendationCode": "function loadScript(src) {\n  // Whitelist of allowed script sources\n  const allowedSources = [\n    'https://trusted-cdn.com/',\n    'https://your-own-domain.com/scripts/'\n  ];\n  \n  // Check if URL is from allowed source\n  const isAllowed = allowedSources.some(source => \n    src.startsWith(source));\n    \n  if (!isAllowed) {\n    console.error(\"Blocked loading script from untrusted source\");\n    return;\n  }\n  \n  const script = document.createElement('script');\n  script.src = src;\n  document.head.appendChild(script);\n}"
+    },
+    {
+      "id": "41c8052a-b059-43da-bd1f-0c8c17e5df46",
+      "type": "innerHTML",
+      "severity": "critical",
+      "title": "innerHTML Injection",
+      "description": "Unfiltered user input is directly used with innerHTML, allowing attackers to inject and execute malicious scripts. See OWASP guidelines for handling HTML content safely.",
+      "code": "...if (container && container instanceof HTMLElement) {\n  container.innerHTML = sanitized;\n}\n...",
+      "line": 55,
+      "column": 10,
+      "recommendation": "Always sanitize user input before inserting it into the DOM. Use textContent instead of innerHTML or implement a library like DOMPurify.",
+      "recommendationCode": "// Option 1: Use textContent (safest)\ndocument.getElementById('output').textContent = userInput;\n\n// Option 2: Use DOMPurify library\ndocument.getElementById('output').innerHTML = DOMPurify.sanitize(userInput);"
+    }
+  ],
+  "summary": {
+    "critical": 1,
+    "high": 3,
+    "medium": 3,
+    "low": 0,
+    "info": 0,
+    "total": 7,
+    "uniqueTypes": 7,
+    "passedChecks": 150
+  },
+  "scannedAt": "2025-03-27T11:36:25.451Z"
+}
