@@ -210,17 +210,49 @@ Bu metrikler, 10.000+ örnek kod parçası üzerinde yapılan testlere dayanmakt
 
 ```bash
 # Repoyu klonlayın
-git clone https://github.com/kullaniciadi/javascript-guvenlik-tarayicisi.git
+git clone https://github.com/umutcrs/advanced-scanner-xss-csrf.git
 
 # Proje dizinine gidin
-cd javascript-guvenlik-tarayicisi
+cd cd advanced-scanner-xss-csrf
 
 # Bağımlılıkları yükleyin
 npm install
 
 # Uygulamayı başlatın
 npm run dev
+
 ```
+
+KURULUM HATASIYLA KARŞILAŞANLAR İÇİN; Node.js Sürümü Güncelleme
+Bu adımlar, Node.js sürümünü güncelleyerek, yükleme sırasında karşılaşılan hataları çözmenize yardımcı olacaktır. Önerilen Node.js sürümleri v18.x veya v20.x gibi LTS (Long Term Support) sürümleridir.
+
+1. Node.js'i Güncellemek için NVM (Node Version Manager) Kullanma
+Eğer Node.js sürümünüz eskiyse veya yükleme sırasında sorunlar yaşıyorsanız, aşağıdaki adımları takip ederek Node.js'i güncelleyebilirsiniz.
+
+Adım 1: NVM (Node Version Manager) Yükleyin
+NVM, farklı Node.js sürümlerini kolayca yönetmenizi sağlar. NVM'yi yüklemek için terminal veya komut satırına şu komutu girin:
+
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+Yukarıdaki komut, NVM'yi sisteminize kuracaktır.
+
+Adım 2: NVM'i Yükledikten Sonra Kaynağınızı Yenileyin
+Kurulum tamamlandıktan sonra, NVM komutlarını kullanabilmek için terminal oturumunuzu yeniden başlatın veya aşağıdaki komutu girerek mevcut oturumu yeniden yükleyin:
+
+
+source ~/.nvm/nvm.sh
+Adım 3: Kararlı Bir Node.js Sürümü Yükleyin
+NVM ile kararlı bir Node.js sürümünü yüklemek için aşağıdaki komutu kullanın. Bu örnekte v18 sürümünü yüklüyoruz, ancak v20 gibi daha yeni bir sürümü de tercih edebilirsiniz:
+
+
+nvm install 18
+Adım 4: Yüklediğiniz Node.js Sürümünü Kullanmak
+Yüklediğiniz Node.js sürümünü kullanmak için şu komutu girin:
+
+
+nvm use 18
+Bu komut, sisteminizdeki aktif Node.js sürümünü v18.x olarak ayarlayacaktır.
+
 
 ### Konfigurasyon (İsteğe Bağlı)
 Tarayıcıyı özelleştirmek için proje kök dizininde bir `config.json` dosyası oluşturun:
